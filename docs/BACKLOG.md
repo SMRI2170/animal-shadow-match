@@ -1,5 +1,18 @@
 # Implementation backlog — issues in order
 
+## v4: 最小のゲーム価値強化（Issue登録済み）
+
+正本: [ゲーム価値と発見 v4](GAME_VALUE_AND_ENGAGEMENT_JA.md)。**Flutterに実装済みではない。**
+
+| 優先 | Issue | 機能 | 依存 |
+|---|---|---|---|
+| P0 | [#24](https://github.com/SMRI2170/animal-shadow-match/issues/24) | 動物別の控えめな反応プリセットと正答カラー化 | #4, #8, #17 |
+| P0 | [#25](https://github.com/SMRI2170/animal-shadow-match/issues/25) | 5匹の個別タップパレード | #20, #21, #22, #24 |
+| P1 | [#26](https://github.com/SMRI2170/animal-shadow-match/issues/26) | 画像の鮮度・特徴タグ・同種繰り返し抑制 | #3, #5, #7 |
+| P0 / 試遊 | [#19](https://github.com/SMRI2170/animal-shadow-match/issues/19) | 従来型(A)→微反応(B)→パレード(C)の主体性/理解/保護者信頼比較 | #24, #25 |
+
+**実装の推奨順:** #20/21/22の5問・保存基盤 → #24 → #25 → 子どもの試遊#19 → #26。図鑑・生息地パック・逆影モード・過剰なレア演出はMVPから除外。
+
 > **2026-10-14 v3:** [5問セット・起動導線・広告の詳細仕様](SESSION_AND_MONETIZATION_JA.md)を正本とし、実装用の[#20](https://github.com/SMRI2170/animal-shadow-match/issues/20)、[#21](https://github.com/SMRI2170/animal-shadow-match/issues/21)、[#22](https://github.com/SMRI2170/animal-shadow-match/issues/22)、調査用の[#23](https://github.com/SMRI2170/animal-shadow-match/issues/23)を追加。既存のUI/UX v2より起動・セッション・広告について優先。
 
 ## v3優先実装（GitHub登録済み）
