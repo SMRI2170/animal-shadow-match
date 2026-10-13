@@ -41,6 +41,15 @@ On a Mac, add iOS scaffolding later with `flutter create --platforms=ios .`. Do 
 
 - [**Single-asset interactive object game v6 (日本語)**](docs/SINGLE_ASSET_OBJECT_GAME_JA.md) — art direction, no-rig FX API, item model, 30-asset trial and implementation gates
 
+## MiniMax image generation through GitHub Actions (manual, paid opt-in only)
+
+- [Run: MiniMax object candidates](https://github.com/SMRI2170/animal-shadow-match/actions/workflows/minimax-images.yml)
+- [Setup instructions (日本語)](docs/MINIMAX_GITHUB_ACTIONS_JA.md)
+- [30 safe one-object prompt candidates](assets/generation/minimax_object_prompts.json)
+- [Offline generator and safeguards](scripts/minimax_batch.py)
+
+Runs only via `workflow_dispatch`, defaults to **dry-run (no API charge)**, limits real generation to **1–6 items/run**, and saves candidate images as temporary review artifacts rather than committing unapproved images. Store the key as the `MINIMAX_API_KEY` repository secret, never in code. The pipeline is checked in but a real paid MiniMax call has **not** been executed. See the setup guide before running.
+
 ## MiniMax art workflow
 
 1. Generate a **single full-body animal** per image (soft 3D clay toy style, no labels, no other objects).
