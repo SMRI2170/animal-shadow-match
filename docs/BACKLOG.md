@@ -1,5 +1,19 @@
 # Implementation backlog — issues in order
 
+> **2026-10-14 v3:** [5問セット・起動導線・広告の詳細仕様](SESSION_AND_MONETIZATION_JA.md)を正本とし、実装用の[#20](https://github.com/SMRI2170/animal-shadow-match/issues/20)、[#21](https://github.com/SMRI2170/animal-shadow-match/issues/21)、[#22](https://github.com/SMRI2170/animal-shadow-match/issues/22)、調査用の[#23](https://github.com/SMRI2170/animal-shadow-match/issues/23)を追加。既存のUI/UX v2より起動・セッション・広告について優先。
+
+## v3優先実装（GitHub登録済み）
+
+| 順序 | Issue | 内容 |
+|---:|---|---|
+| 1 | [#20](https://github.com/SMRI2170/animal-shadow-match/issues/20) | 5問セット進行・正答カウント・ターゲット重複排除 |
+| 2 | [#21](https://github.com/SMRI2170/animal-shadow-match/issues/21) | 5匹の達成画面・続行/休憩ボタン・REST |
+| 3 | [#22](https://github.com/SMRI2170/animal-shadow-match/issues/22) | 中断/再開・保存スキーマ・二重計上防止 |
+| 4 | [#2,#8,#9,#16,#17,#19](https://github.com/SMRI2170/animal-shadow-match/issues) | v2からv3の単問UI・手のガイド・状態機械・試遊を整合 |
+| 5（公開後） | [#23](https://github.com/SMRI2170/animal-shadow-match/issues/23) | 親向け広告/課金の可否のみ調査、MVPは広告0 |
+
+
+
 > **UI/UXの実装方針:** [UI/UX詳細設計 v2.0](UI_UX_SPEC_JA.md) を参照。既存 #2, #8, #9, #10, #11, #12 を詳細化し、初回ガイド・状態制御・保護者設定・子ども試遊の個別Issueを追加した。以下15件は旧来の基盤バックログで、新規Issueは別途 [GitHub Issues](https://github.com/SMRI2170/animal-shadow-match/issues) を参照。追加したIssue番号はGitHub上で確認すること。
 
 Each linked file is an import-ready GitHub Issue description. `P0` blocks public release, `P1` improves MVP quality, `P2` is post-release growth.
