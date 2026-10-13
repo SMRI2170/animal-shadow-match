@@ -1,0 +1,82 @@
+name: MiniMax - Generate object candidates
+
+# Paid image generation must NEVER run on push, pull_request or schedule.
+on:
+  workflow_dispatch:
+    inputs:
+      start_index:
+        description: '0-based candidate number (0..29) in the 30-object catalog'
+        required: true
+        default: 0
+        type: number
+      count:
+        description: 'How many candidates to generate (1..6 max per run)'
+        required: true
+        default: 1
+        type: number
+      region:
+        description: 'MiniMax API region for your account/key'
+        required: true
+        default: intl
+        type: choice
+        options:
+          - intl
+          - cn
+      dry_run:
+        description: 'Preview IDs/prompts without making any paid API requests (recommended)'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: minimax-manual-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  candidates:
+    name: Generate and upload candidates for human review
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install image validator
+        run: python -m pip install -r scripts/requirements.txt
+
+      - name: Dry run (NO API, NO CHARGE)
+        if: ${{ inputs.dry_run }}
+        env:
+          MM_START: ${{ inputs.start_index }}
+          MM_COUNT: ${{ inputs.count }}
+          MM_REGION: ${{ inputs.region }}
+        run: |
+          python scripts/minimax_batch.py \
+            --start "$MM_START" --count "$MM_COUNT" --region "$MM_REGION" \
+            --output generated/minimax --dry-run
+
+      - name: Generate paid images with MiniMax (manual opt-in only)
+        if: ${{ !inputs.dry_run }}
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          MM_START: ${{ inputs.start_index }}
+          MM_COUNT: ${{ inputs.count }}
+          MM_REGION: ${{ inputs.region }}
+        run: |
+          python scripts/minimax_batch.py \
+            --start "$MM_START" --count "$MM_COUNT" --region "$MM_REGION" \
+            --output generated/minimax
+
+      - name: Upload review candidates (not committed to Git)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minimax-review-${{ github.run_id }}
+          path: generated/minimax/
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 6
