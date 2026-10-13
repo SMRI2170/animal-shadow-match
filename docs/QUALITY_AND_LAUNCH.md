@@ -87,3 +87,18 @@ Formal spec: [Game value and engagement v4](GAME_VALUE_AND_ENGAGEMENT_JA.md). **
 - [ ] Novelty tests: no repeated target in one set, handle recently seen animals without excluding all when catalog is small.
 - [ ] Compare baseline (simple success), microreactions, parade using small consented exploratory playtests.
 - [ ] Parents can end sessions; do not call increased watch time alone a positive outcome.
+
+## v6: no-rig tactile object game — release gate
+
+Authoritative: [Single-asset object game v6](SINGLE_ASSET_OBJECT_GAME_JA.md).
+
+- [ ] `ShadowItem` model + old Animal demo regression tests pass (#29).
+- [ ] At least 20/30 prototype objects have clear, recognizable silhouettes at actual phone tile size (#28).
+- [ ] Squish, wobble, bounce, inflate effects use only one colored image; silhouette comes from the same alpha mask (#24).
+- [ ] Reduce motion/mute and low-performance Android are supported, with no excessive flash or intense shaking.
+- [ ] Object transform does not move its logical tap zone or cause neighboring choices to misfire.
+- [ ] End-of-set area lets five independently tappable objects react, while continue/rest buttons remain separate (#25, #21).
+- [ ] The optional split-image FX (#30) does not imply realistic cut surface/interior; reject if it looks unnatural.
+- [ ] Asset QA and user tests avoid indistinguishable same-shape color variants (#26, #19).
+- [ ] The existing 5-question set, resume behavior, and ads-free child gameplay are unchanged.
+- [ ] No bone rigs, frame-by-frame sprite animations, multi-pose AI generations, or real-time art API added as a hidden prerequisite.
