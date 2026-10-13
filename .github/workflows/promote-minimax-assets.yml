@@ -83,23 +83,27 @@ jobs:
           WORKFLOW: ${{ inputs.source_workflow }}
         run: |
           set -euo pipefail
-          if ! command -v gh >/dev/null 2>&1; then
-            echo "gh CLI is required to read protected artifacts" >&2
+          if [[ "${WORKFLOW}" != "minimax-images.yml" ]]; then
+            echo "Only minimax-images.yml may be used as a source" >&2
+            exit 1
+          fi
+          if [[ ! "${RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo "source_run_id must be a numeric GitHub Actions run id" >&2
             exit 1
           fi
           owner="${GITHUB_REPOSITORY%/*}"
           name="${GITHUB_REPOSITORY##*/}"
-          meta="$(gh api "/repos/${owner}/${name}/actions/runs/${RUN_ID}" --jq '{status,conclusion,name}')"
-          echo "Run metadata: ${meta}"
+          meta="$(gh api "/repos/${owner}/${name}/actions/runs/${RUN_ID}" --jq '{status,conclusion,path,event,head_branch}')"
           status="$(echo "${meta}" | python -c 'import sys,json;print(json.load(sys.stdin)["status"])')"
           conclusion="$(echo "${meta}" | python -c 'import sys,json;print(json.load(sys.stdin)["conclusion"])')"
-          wf="$(echo "${meta}" | python -c 'import sys,json;print(json.load(sys.stdin)["name"])')"
-          if [[ "${status}" != "completed" || "${conclusion}" != "success" ]]; then
-            echo "Run ${RUN_ID} did not finish successfully; refusing to promote" >&2
-            exit 1
-          fi
-          if [[ "${wf}" != "${WORKFLOW}" ]]; then
-            echo "Run ${RUN_ID} belongs to '${wf}', expected '${WORKFLOW}'" >&2
+          path="$(echo "${meta}" | python -c 'import sys,json;print(json.load(sys.stdin)["path"])')"
+          event="$(echo "${meta}" | python -c 'import sys,json;print(json.load(sys.stdin)["event"])')"
+          head_branch="$(echo "${meta}" | python -c 'import sys,json;print(json.load(sys.stdin)["head_branch"])')"
+          if [[ "${status}" != "completed" || "${conclusion}" != "success" ||
+                "${path}" != ".github/workflows/minimax-images.yml" ||
+                "${event}" != "workflow_dispatch" ||
+                "${head_branch}" != "main" ]]; then
+            echo "Source must be a successful manual minimax-images.yml run from main" >&2
             exit 1
           fi
 
@@ -132,40 +136,58 @@ jobs:
           set -euo pipefail
           rm -rf "$STAGING_DIR" && mkdir -p "$STAGING_DIR"
           python - <<'PY'
-          import json, os, re, shutil, sys
+          import json, os, re, sys
           from pathlib import Path
+          from PIL import Image
+
           approved = [t.strip() for t in os.environ["APPROVED"].split(",") if t.strip()]
           valid = re.compile(r"^[a-z0-9_]+$")
+          if not 1 <= len(approved) <= 6 or len(set(approved)) != len(approved):
+              raise SystemExit("approved_ids must contain 1-6 distinct ids")
           for item in approved:
-              if not valid.fullmatch(item):
-                  print(f"rejecting unsafe id {item!r}", file=sys.stderr)
-                  sys.exit(1)
+              if len(item) > 64 or not valid.fullmatch(item):
+                  raise SystemExit(f"rejecting unsafe id {item!r}")
           report = json.loads(Path(os.environ["ARTIFACT_DIR"], "report.json").read_text())
-          items = {item["id"]: item for item in report.get("items", [])}
-          unknown = [item for item in approved if item not in items]
-          if unknown:
-              print(f"unknown approved ids: {unknown}", file=sys.stderr)
-              sys.exit(1)
-          artifact_root = Path(os.environ["ARTIFACT_DIR"])
+          items = report.get("items", [])
+          if report.get("dry_run") or not isinstance(items, list):
+              raise SystemExit("expected a real generation report")
+          if len({entry.get("id") for entry in items}) != len(items):
+              raise SystemExit("duplicate candidate ids in report")
+          by_id = {entry["id"]: entry for entry in items}
+          artifact_root = Path(os.environ["ARTIFACT_DIR"]).resolve()
           staging = Path(os.environ["STAGING_DIR"])
           for item in approved:
-              spec = items[item]
+              if item not in by_id:
+                  raise SystemExit(f"unknown approved id: {item}")
+              spec = by_id[item]
               if spec.get("status") != "generated_unreviewed":
-                  print(f"{item}: status is {spec.get('status')!r}, refusing", file=sys.stderr)
-                  sys.exit(1)
+                  raise SystemExit(f"{item}: not a generated image")
               filename = spec.get("file")
-              if not filename:
-                  print(f"{item}: missing file field", file=sys.stderr)
-                  sys.exit(1)
+              if not isinstance(filename, str):
+                  raise SystemExit(f"{item}: missing filename")
+              rel = Path(filename)
+              if (rel.name != filename or rel.stem != item
+                  or rel.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}):
+                  raise SystemExit(f"{item}: unsafe or unexpected filename")
               src = artifact_root / filename
-              dst = staging / f"{item}{Path(filename).suffix}"
-              shutil.copyfile(src, dst)
-              print(f"staged {dst}")
+              if (src.is_symlink() or not src.is_file()
+                  or not src.resolve().is_relative_to(artifact_root)
+                  or not 0 < src.stat().st_size <= 12 * 1024 * 1024):
+                  raise SystemExit(f"{item}: invalid source image")
+              # Normalize PNG/JPEG/WEBP to real RGBA PNGs. prepare_assets.py
+              # processes *.png only, and never receives mislabeled JPEG bytes.
+              with Image.open(src) as original:
+                  original.load()
+                  if (min(original.size) < 512 or max(original.size) > 4096
+                      or original.format not in {"PNG", "JPEG", "WEBP"}):
+                      raise SystemExit(f"{item}: unsupported image dimensions/format")
+                  original.convert("RGBA").save(staging / f"{item}.png", format="PNG")
+              print(f"staged {item}.png")
           PY
 
-      # ------------------------------------------------------------
-      # Stage 3: build the WebP pair, update items.json
-      # ------------------------------------------------------------
+      - name: Install CPU background removal when requested
+        if: ${{ inputs.background_mode == 'auto_draft' }}
+        run: python -m pip install 'rembg[cpu]>=2.0.67,<3'
 
       - name: Process images into WebP color + shadow
         env:
@@ -202,6 +224,8 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
+          import os
+          import sys
           from PIL import Image, ImageDraw
 
           report = json.loads(Path(os.environ["PROMOTION_REPORT"]).read_text())
@@ -251,8 +275,12 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           # Do not commit transient preview images; only the WebP pair +
           # updated catalog should land in the PR.
-          git add assets/items assets/catalog/items.json
-          git restore --staged assets/items/_preview.png || true
+          git add assets/catalog/items.json
+          # Never commit the generated report.json or unreviewed previews.
+          IFS=',' read -ra approved_ids <<< "$APPROVED"
+          for approved_id in "${approved_ids[@]}"; do
+            git add "assets/items/${approved_id}.webp" "assets/items/${approved_id}_shadow.webp"
+          done
           if git diff --cached --quiet; then
               echo "no changes to commit; aborting Draft PR creation"
               exit 0
