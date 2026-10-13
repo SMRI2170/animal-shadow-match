@@ -73,3 +73,17 @@ Do not ship demo art as real MiniMax assets; do not claim “educationally prove
 - [ ] 正解/不正解/5問完了/休憩/起動の全てに広告表示無し
 - [ ] 2〜3歳と4〜5歳の試遊で、5問の長さと完了2択の理解を確認
 - [ ] Google Play FamiliesポリシーとSDK状況は収益化前に再調査
+
+## v4: intrinsic play / game value QA
+
+Formal spec: [Game value and engagement v4](GAME_VALUE_AND_ENGAGEMENT_JA.md). **Design only until the Flutter implementation and tests pass.**
+
+- [ ] Animal-specific preset reactions (hop/sway/tilt/float/pulse + default) all show a perceivable yet calm response.
+- [ ] Color silhouette transitions are tied to a correct tap, never accidental background taps.
+- [ ] Every tap triggers at most one reaction, no duplicate round/event on multitouch, resume or dispose.
+- [ ] The actual five matched animal images reappear in the parade, tap only the selected animal; no endless autoplay.
+- [ ] On smaller screens no animal overlaps another tap region; responsive view, all Semantics and reduce motion tested.
+- [ ] No gambling-like rare animations, daily login rewards, loot boxes, time pressure, and no child-facing ads or tracking.
+- [ ] Novelty tests: no repeated target in one set, handle recently seen animals without excluding all when catalog is small.
+- [ ] Compare baseline (simple success), microreactions, parade using small consented exploratory playtests.
+- [ ] Parents can end sessions; do not call increased watch time alone a positive outcome.
