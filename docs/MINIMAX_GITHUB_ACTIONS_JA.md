@@ -1,5 +1,12 @@
 # GitHub Actions × MiniMax 画像量産手順（2026-10-14）
 
+## 生成成功後にゲームへ取り込むには
+
+**Artifactはゲームに自動登録されない。** Flutterは現状`animals.json`のみを参照する。色つき画像、同一マスクの影、`items.json`、pubspec、汎用`ShadowItem`の実装が必要。
+
+手動の手順/将来の自動PR構成は[生成画像をゲーム出題プールに反映する手順](GENERATED_ASSETS_TO_GAME_POOL_JA.md)を参照。PR自動化は[#31](https://github.com/SMRI2170/animal-shadow-match/issues/31)。**実際に出題されることの検証は未完了。**
+
+
 ## GitHub Actions警告への対応（2026-10-14）
 
 過去の実行で `Node.js 20 is deprecated` と `ubuntu-latest`→Ubuntu 26.04 の移行通知が出る場合がある。これらはそれ自体では画像生成失敗を示さず、ジョブが緑の `Success` ならその**実行した手順**は正常終了している。
