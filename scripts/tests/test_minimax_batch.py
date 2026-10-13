@@ -58,6 +58,28 @@ class MiniMaxBatchTests(unittest.TestCase):
                         mm.run(start=0, count=1, output=Path(temp),
                                dry_run=False, region="intl")
 
+    def test_subscription_only_prevents_paygo_key_before_request(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with patch.object(mm, "fetch_image", side_effect=AssertionError("API CALLED")):
+                with patch.dict("os.environ", {
+                    "MINIMAX_API_KEY": "paygo-test-key",
+                    "MINIMAX_SUBSCRIPTION_ONLY": "1",
+                }):
+                    with self.assertRaisesRegex(RuntimeError, "Subscription Key"):
+                        mm.run(start=0, count=1, output=Path(temp),
+                               dry_run=False, region="intl")
+
+    def test_subscription_only_dry_run_never_uses_key(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with patch.object(mm, "fetch_image", side_effect=AssertionError("API CALLED")):
+                with patch.dict("os.environ", {
+                    "MINIMAX_API_KEY": "paygo-test-key",
+                    "MINIMAX_SUBSCRIPTION_ONLY": "1",
+                }):
+                    plan = mm.run(start=0, count=1, output=Path(temp),
+                                  dry_run=True, region="intl")
+            self.assertEqual(plan[0]["status"], "planned")
+
     def test_image_output_checks(self):
         buffer = BytesIO()
         Image.new("RGB", (1024, 1024), (255, 255, 255)).save(buffer, "PNG")
