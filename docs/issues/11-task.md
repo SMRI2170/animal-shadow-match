@@ -14,3 +14,11 @@ GitHub上で追加画像やゲームロジックの破壊を自動的に検出�
 - [ ] エラーがあればPRチェックは失敗。
 - [ ] 故意に壊したasset pathでCI失敗。
 - [ ] 少なくともUI正誤分岐のWidget testがある。
+
+
+---
+
+## UI/UX v2 設計参照
+
+**このファイルは当初のIssue原稿です。実装時は[最新版UI/UX仕様](../UI_UX_SPEC_JA.md)と[更新済みGitHub Issue #11](https://github.com/SMRI2170/animal-shadow-match/issues/11)を最優先で参照してください。**
+新規UX関連Issue #16（初回ガイド）、#17（状態機械）、#18（保護者専用領域）、#19（子どもの試遊）との依存も確認すること。
