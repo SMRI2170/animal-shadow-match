@@ -119,10 +119,13 @@ def fetch_image(prompt: str, key: str, *, region: str) -> bytes:
 def save_image(raw: bytes, target: Path) -> str:
     if not raw or len(raw) > MAX_BYTES:
         raise ValueError("Image is empty or exceeds 12 MiB limit")
-    with Image.open(BytesIO(raw)) as img:
-        fmt = img.format
-        width, height = img.size
-        img.verify()
+    try:
+        with Image.open(BytesIO(raw)) as img:
+            fmt = img.format
+            width, height = img.size
+            img.verify()
+    except (OSError, ValueError) as exc:
+        raise ValueError("MiniMax response is not a valid image") from None
     if fmt not in FORMAT_EXT or min(width, height) < 512 or max(width, height) > 4096:
         raise ValueError("Unrecognized or unexpected MiniMax image dimensions/format")
     dest = target.with_suffix(FORMAT_EXT[fmt])
