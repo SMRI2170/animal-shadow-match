@@ -4,8 +4,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../data/catalog_repository.dart';
-import '../domain/animal.dart';
 import '../domain/round_factory.dart';
+import '../domain/shadow_item.dart';
+import 'single_asset_effect.dart';
 
 class GamePage extends StatefulWidget {
   const GamePage({super.key});
@@ -15,31 +16,35 @@ class GamePage extends StatefulWidget {
 }
 
 class _GamePageState extends State<GamePage> {
-  late final Future<List<Animal>> _animals = const CatalogRepository().load();
+  late final Future<List<ShadowItem>> _items = const CatalogRepository().load();
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Animal>>(
-      future: _animals,
+    return FutureBuilder<List<ShadowItem>>(
+      future: _items,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return const Scaffold(
-            body: Center(child: Icon(Icons.sentiment_dissatisfied_rounded, size: 72)),
+            body: Center(
+              child: Icon(Icons.sentiment_dissatisfied_rounded, size: 72),
+            ),
           );
         }
         if (!snapshot.hasData) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
-        return _PlayBoard(animals: snapshot.data!);
+        return _PlayBoard(items: snapshot.data!);
       },
     );
   }
 }
 
 class _PlayBoard extends StatefulWidget {
-  const _PlayBoard({required this.animals});
+  const _PlayBoard({required this.items});
 
-  final List<Animal> animals;
+  final List<ShadowItem> items;
 
   @override
   State<_PlayBoard> createState() => _PlayBoardState();
@@ -53,13 +58,14 @@ class _PlayBoardState extends State<_PlayBoard> {
   String? _wrongChoice;
   Timer? _nextRoundTimer;
   Timer? _wrongResetTimer;
+  bool _effectPlaying = false;
 
   int get _optionCount => _completed < 5 ? 2 : (_completed < 15 ? 3 : 4);
 
   @override
   void initState() {
     super.initState();
-    _round = _factory.create(catalog: widget.animals, optionCount: _optionCount);
+    _round = _factory.create(catalog: widget.items, optionCount: _optionCount);
   }
 
   @override
@@ -69,30 +75,42 @@ class _PlayBoardState extends State<_PlayBoard> {
     super.dispose();
   }
 
-  void _choose(Animal animal) {
+  void _onEffectCompleted() {
+    if (!mounted) return;
+    _advanceRound();
+  }
+
+  void _advanceRound() {
+    final previousTarget = _round.target.id;
+    _nextRoundTimer?.cancel();
+    setState(() {
+      _completed += 1;
+      _round = _factory.create(
+        catalog: widget.items,
+        optionCount: _optionCount,
+        previousTargetId: previousTarget,
+      );
+      _solved = false;
+      _wrongChoice = null;
+      _effectPlaying = false;
+    });
+  }
+
+  void _choose(ShadowItem item) {
     if (_solved) return;
-    if (_round.isCorrect(animal.id)) {
+    if (_round.isCorrect(item.id)) {
       _wrongResetTimer?.cancel();
       setState(() {
         _solved = true;
         _wrongChoice = null;
+        _effectPlaying = true;
       });
       _nextRoundTimer?.cancel();
-      _nextRoundTimer = Timer(const Duration(milliseconds: 850), () {
-        if (!mounted) return;
-        final previousTarget = _round.target.id;
-        setState(() {
-          _completed += 1;
-          _round = _factory.create(
-            catalog: widget.animals,
-            optionCount: _optionCount,
-            previousTargetId: previousTarget,
-          );
-          _solved = false;
-        });
-      });
+      // 1.1s base reaction window; actual advance happens when the effect's
+      // SingleAssetEffect widget calls back via [SingleAssetEffect.onCompleted].
+      _nextRoundTimer = Timer(const Duration(milliseconds: 1200), _advanceRound);
     } else {
-      setState(() => _wrongChoice = animal.id);
+      setState(() => _wrongChoice = item.id);
       _wrongResetTimer?.cancel();
       _wrongResetTimer = Timer(const Duration(milliseconds: 500), () {
         if (mounted) setState(() => _wrongChoice = null);
@@ -131,28 +149,27 @@ class _PlayBoardState extends State<_PlayBoard> {
               Expanded(
                 flex: 5,
                 child: Center(
-                  child: AnimatedScale(
-                    duration: const Duration(milliseconds: 280),
-                    curve: Curves.easeOutBack,
-                    scale: _solved ? 1.08 : 1,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 340, maxWidth: 340),
-                          child: Semantics(
-                            label: 'Find the matching silhouette for ${_round.target.name}',
-                            child: Image.asset(_round.target.imagePath, fit: BoxFit.contain),
-                          ),
-                        ),
-                        if (_solved)
-                          const Positioned(
-                            right: 0,
-                            top: 0,
-                            child: Icon(Icons.auto_awesome_rounded,
-                                size: 52, color: Color(0xFFF5B95A)),
-                          ),
-                      ],
+                  child: ConstrainedBox(
+                    constraints:
+                        const BoxConstraints(maxHeight: 340, maxWidth: 340),
+                    child: Semantics(
+                      label: 'Find the matching silhouette for '
+                          '${_round.target.accessibilityLabel ?? _round.target.id}',
+                      child: _solved
+                          ? SingleAssetEffect(
+                              item: _round.target,
+                              assetPath: _round.target.imagePath,
+                              onCompleted: _effectPlaying ? _onEffectCompleted : null,
+                            )
+                          : AnimatedScale(
+                              duration: const Duration(milliseconds: 280),
+                              curve: Curves.easeOutBack,
+                              scale: _solved ? 1.08 : 1,
+                              child: Image.asset(
+                                _round.target.imagePath,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
                     ),
                   ),
                 ),
@@ -166,21 +183,21 @@ class _PlayBoardState extends State<_PlayBoard> {
                       spacing: 12,
                       runSpacing: 12,
                       children: [
-                        for (final animal in _round.options)
+                        for (final item in _round.options)
                           Semantics(
                             button: true,
-                            label: '${animal.name} silhouette',
+                            label: '${item.accessibilityLabel ?? item.id} silhouette',
                             child: GestureDetector(
-                              onTap: () => _choose(animal),
+                              onTap: () => _choose(item),
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 160),
                                 width: tileSize,
                                 height: tileSize,
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: _solved && animal.id == _round.target.id
+                                  color: _solved && item.id == _round.target.id
                                       ? const Color(0xFFD7F0DD)
-                                      : _wrongChoice == animal.id
+                                      : _wrongChoice == item.id
                                           ? const Color(0xFFFFE9C9)
                                           : Colors.white,
                                   borderRadius: BorderRadius.circular(28),
@@ -197,7 +214,7 @@ class _PlayBoardState extends State<_PlayBoard> {
                                   ],
                                 ),
                                 child: Image.asset(
-                                  animal.shadowPath,
+                                  item.shadowPath,
                                   fit: BoxFit.contain,
                                 ),
                               ),
