@@ -1,6 +1,7 @@
 name: MiniMax - Generate object candidates
 
-# Paid image generation must NEVER run on push, pull_request or schedule.
+# Image generation consumes Go M Plan allowance / possibly purchased Credits.
+# NEVER run on push, pull_request or schedule. The key must be an sk-cp Subscription Key.
 on:
   workflow_dispatch:
     inputs:
@@ -63,6 +64,7 @@ jobs:
         if: ${{ !inputs.dry_run }}
         env:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          MINIMAX_SUBSCRIPTION_ONLY: '1' # Go M Plan: reject pay-as-you-go keys
           MM_START: ${{ inputs.start_index }}
           MM_COUNT: ${{ inputs.count }}
           MM_REGION: ${{ inputs.region }}
