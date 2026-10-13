@@ -78,7 +78,12 @@ def _auto_remove_background(source: Path) -> Path:
     return destination
 
 
-def process_file(source: Path, destination: Path) -> str:
+def process_file(source: Path, destination: Path, *, output_stem: str | None = None) -> str:
+    # Background-removal drafts use <id>_rembg.png but must retain <id> as
+    # the published name so items.json and the generated WebP pair agree.
+    stem = output_stem or source.stem
+    if not _is_valid_id(stem):
+        raise ValueError(f"Unsafe output stem: {stem!r}")
     """Convert a transparent source PNG into a color WebP + matching shadow."""
     original = Image.open(source).convert("RGBA")
     alpha = original.getchannel("A")
@@ -104,15 +109,15 @@ def process_file(source: Path, destination: Path) -> str:
     output.alpha_composite(object_only, (x, y))
 
     destination.mkdir(parents=True, exist_ok=True)
-    color_target = destination / f"{source.stem}.webp"
+    color_target = destination / f"{stem}.webp"
     output.save(color_target, format="WEBP", quality=88, method=6)
 
     silhouette = Image.new("RGBA", (SIZE, SIZE), (*SHADOW_RGB, 0))
     silhouette.putalpha(output.getchannel("A"))
-    shadow_target = destination / f"{source.stem}_shadow.webp"
+    shadow_target = destination / f"{stem}_shadow.webp"
     silhouette.save(shadow_target, format="WEBP", lossless=True, method=6)
-    print(f"processed: {source.stem}")
-    return source.stem
+    print(f"processed: {stem}")
+    return stem
 
 
 def _select_inputs(source_dir: Path, only_ids: Iterable[str] | None) -> list[Path]:
@@ -185,7 +190,7 @@ def main() -> None:
                         print(f"already transparent: {source.stem}")
             except Exception as exc:
                 raise RuntimeError(f"background removal failed for {source}: {exc}") from exc
-        processed.append(process_file(work, args.output))
+        processed.append(process_file(work, args.output, output_stem=source.stem))
 
     if not processed:
         raise SystemExit("No inputs were processed; check --ids and --strict flags")
