@@ -31,3 +31,20 @@ jobs:
       - run: python -m pip install -r scripts/requirements.txt
       - run: python scripts/validate_catalog.py
       - run: python -m unittest discover -s scripts/tests -p 'test_minimax_batch.py'
+      - name: Minimax dry-run CLI (offline, no key or API usage)
+        env:
+          MINIMAX_SUBSCRIPTION_ONLY: '1'
+        run: |
+          python scripts/minimax_batch.py --start 0 --count 2 \
+            --region intl --output /tmp/minimax-ci-dryrun --dry-run
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          out = Path('/tmp/minimax-ci-dryrun')
+          report = json.loads((out / 'report.json').read_text())
+          assert report['dry_run'] is True
+          assert report['requested_count'] == 2
+          assert all(x['status'] == 'planned' for x in report['items'])
+          assert not list(out.glob('*.png'))
+          assert not list(out.glob('*.jpg'))
+          PY
