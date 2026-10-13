@@ -1,5 +1,22 @@
 # Implementation backlog — issues in order
 
+## v6 — 非キャラクターのワンアセット方針（優先）
+
+正式仕様：[ぷにぷに物体・1原画像設計 v6](SINGLE_ASSET_OBJECT_GAME_JA.md)。**v5のキャラクター20枚+魔法のおもちゃ12枚の試作は取りやめ**、本番用画像は新試作の評価後に量産。Flutter実装とリポジトリ名は未変更。
+
+| 進める順 | Issue | 完了内容 |
+|---:|---|---|
+| 1 | [#27](https://github.com/SMRI2170/animal-shadow-match/issues/27) | キャラ不要の製品方針・独自性・試遊ゲート |
+| 2 | [#28](https://github.com/SMRI2170/animal-shadow-match/issues/28) | 非キャラ物体30枚（ゼリー12/おもちゃ10/宇宙自然8）の画像/影/Fx評価 |
+| 3 | [#29](https://github.com/SMRI2170/animal-shadow-match/issues/29) | Animal→汎用ShadowItemの後方互換移行 |
+| 4 | [#24](https://github.com/SMRI2170/animal-shadow-match/issues/24) | 1画像だけでsquish/wobble/bounce/inflate |
+| 5 | [#20](https://github.com/SMRI2170/animal-shadow-match/issues/20)、[#21](https://github.com/SMRI2170/animal-shadow-match/issues/21)、[#22](https://github.com/SMRI2170/animal-shadow-match/issues/22) | 5問セット、5個と遊ぶ場、正確な途中復帰 |
+| 6 | [#25](https://github.com/SMRI2170/animal-shadow-match/issues/25) | 5つの物体への独立タップによる反応 |
+| 7 | [#19](https://github.com/SMRI2170/animal-shadow-match/issues/19)、[#26](https://github.com/SMRI2170/animal-shadow-match/issues/26) | 幼児試遊/輪郭とFx品質 |
+| P1実験 | [#30](https://github.com/SMRI2170/animal-shadow-match/issues/30) | 画像1枚を分割して「ぱかっ」と離すClip FX。リアル断面/中身の表現は別画像が必要 |
+
+従来のv4「動物固有の反応」、v5「ふしぎなキャラを生成」の作業は**新仕様で上書き**。#24/#25/#27/#28はこの判断に合わせて本文/タイトル更新済み。動物デモ8種を削除せずリグレッションテストに残す。
+
 ## v5 題材の差別化（デザインピボットの比較、未採用）
 
 **[比較設計 v5](THEME_PIVOT_EVALUATION_JA.md)**。既存の動物を乗り物/食べ物へ単純に置換するだけでは差別化が弱く、オリジナルキャラも既存アプリがあるため勝利は未確定。
