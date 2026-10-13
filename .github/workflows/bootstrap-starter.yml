@@ -26,7 +26,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/starter"
           unzip -q animal-shadow-match-starter.zip -d "$RUNNER_TEMP/starter"
           test -f "$RUNNER_TEMP/starter/animal-shadow-match/lib/main.dart"
-          cp -a "$RUNNER_TEMP/starter/animal-shadow-match/." .
+          rsync -a --exclude=".github/" "$RUNNER_TEMP/starter/animal-shadow-match/" ./
           test -f lib/main.dart
           test -f docs/DESIGN_JA.md
           test -f assets/catalog/animals.json
