@@ -7,7 +7,7 @@ An offline, text-free animal silhouette matching game for children ages 2–5. B
 ## Product at a glance
 
 - **One action:** look at a colorful animal, then **tap** its matching silhouette.
-- **UX v2 target (design, not implemented):** launch directly into play, remove star bar, show gentle no-text hand hint, turn the correct shadow into a color animal, guard against accidental double taps. See [UI/UX v2](docs/UI_UX_SPEC_JA.md).
+- **UX v3 target (design, not implemented):** direct play, 5 questions per set (about 1–2 minutes as a hypothesis), 5-animal completion screen, clear continue/rest choices, and resume from interruption. MVP has zero ads/SDK; monetization is for separate parental review. See [Session v3](docs/SESSION_AND_MONETIZATION_JA.md). See [UI/UX v2](docs/UI_UX_SPEC_JA.md).
 - **Progressive difficulty:** 2 choices (first 5 correct), 3 choices (next 10), then 4 choices.
 - **No reading required:** no in-game instructional text or language selection.
 - **Gentle feedback:** success animation; wrong answers have no penalty, timer, or loud buzzer.
@@ -65,7 +65,8 @@ docs/                          # Product, art, QA, app store, backlog
 ## Documentation
 
 - [設計書（日本語）](docs/DESIGN_JA.md)
-- [**Child-first UI/UX detailed spec v2.0 (日本語)**](docs/UI_UX_SPEC_JA.md) — screen layout, states, tutorial, parent UX, accessibility and test gates
+- [**Child-first UI/UX detailed spec v2.0 (日本語)**](docs/UI_UX_SPEC_JA.md) — per-round screen, hints, animations, accessibility
+- [**5-question session & monetization v3.0 (日本語)**](docs/SESSION_AND_MONETIZATION_JA.md) — launch journey, five-round set, completion/rest, offline resume and ad-free MVP
 - [Product requirements](docs/PRODUCT_SPEC.md)
 - [Architecture and decisions](docs/ARCHITECTURE.md)
 - [MiniMax asset pipeline](docs/ASSET_PIPELINE.md)
