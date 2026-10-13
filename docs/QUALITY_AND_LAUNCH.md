@@ -46,3 +46,17 @@ If ads are later introduced, reassess all Families policies. Ads to children mus
 ## Ship / no-ship gate
 
 Do not ship demo art as real MiniMax assets; do not claim “educationally proven”, “Teacher Approved”, or guaranteed learning outcomes unless individually verified and authorized. Stop release for missing images, unclear silhouette options, dangerous ad SDK, missing privacy disclosures, or failure on small Android displays.
+
+
+## UI/UX v2 release gate (2026-10-14)
+
+画面・操作の正本: [UI/UX v2](UI_UX_SPEC_JA.md)。公開前に [UX試遊記録](UX_PLAYTEST_TEMPLATE.md) を使って、2〜3歳児と4〜5歳児の双方で操作を観察する。小規模な観察を科学的効果の証明として扱わない。
+
+- [ ] 初回スタートボタン不要・ゲーム上の読字不要・初回手ヒントが分かる
+- [ ] 星の進捗行・余分なUIが無く、1匹+影2〜4個に集中できる
+- [ ] 360×640dp / 393×851dp / 800×1280dp、全選択肢のタップ領域>=96dp、スクロールなし
+- [ ] 誤答・正答・連打・バックグラウンド復帰で問題が壊れない
+- [ ] 無音、減らしたアニメ、アクセシビリティを確認
+- [ ] 保護者導線を通らずに購入/外部URLに到達しない
+- [ ] 画像と影のペアが一義的で、小型端末でも明確
+- [ ] 試遊で迷った箇所と設計変更理由を記録
