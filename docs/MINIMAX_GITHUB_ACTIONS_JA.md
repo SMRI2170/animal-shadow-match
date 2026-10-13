@@ -1,5 +1,16 @@
 # GitHub Actions × MiniMax 画像量産手順（2026-10-14）
 
+## 2026-10-14 実装状態と実行の境界
+
+- ✅ MiniMax Image-01へのリクエスト処理・最大6枚・Subscription Key形式ガード・dry-run・Artifacts一時保存をGitHubへコミット済み。
+- ✅ 通常CIにも`python scripts/minimax_batch.py --start 0 --count 2 --region intl --output /tmp/minimax-ci-dryrun --dry-run`を追加（キーを読まず、料金の発生するAPIを呼ばない）。
+- ☐ CIのGitHub Actions実行成功はまだ未確認。ローカルではGitHubリポジトリの取得制約によりテスト実行できなかった。
+- ☐ GitHubの`MINIMAX_API_KEY` Secretの登録状態は、GitHub連携の権限上こちらから確認・設定できない。
+- ☐ 有料・利用枠消費を伴うMiniMax Image-01実生成はまだ行っていない。 `sk-cp-`形式でも利用枠からの課金可否・残枠・image-01の認可は実APIで未検証。
+
+**次のユーザー操作は1つ:** [Actions Secrets設定](https://github.com/SMRI2170/animal-shadow-match/settings/secrets/actions) に `MINIMAX_API_KEY` を入力（既に設定済みなら不要）。登録先の値はこの会話に貼ったキーではなく、安全のためMiniMaxで再発行したSubscription Keyを推奨。続いて [Run workflow](https://github.com/SMRI2170/animal-shadow-match/actions/workflows/minimax-images.yml) の`dry_run=true`を実行し、成功なら`dry_run=false, count=1`を明示して1件のみ画像生成する。サブスクリプション枠の確認なしに30件を一気に実行しない。
+
+
 ## MiniMax Go (M Plan) 利用者向け — 最優先（2026-10-14）
 
 公式[M Plan](https://www.minimax.io/m-plan)によると、**Goプランにも画像生成とAPIキー利用が含まれています**。従来の「画像生成APIは必ず別途従量課金」という説明は正確ではありません。Goプランで生成する場合はMiniMaxの **Subscription Key (通常 `sk-cp-` で始まるもの)** を利用し、**標準のPay-as-you-go API Keyを使用しない**でください。
