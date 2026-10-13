@@ -1,5 +1,15 @@
 # Implementation backlog — issues in order
 
+## v6素材取り込み — MiniMaxからゲームの出題プールへ
+
+成功したMiniMax生成のArtifactは**まだゲームの出題プールには入っていない**。Flutterは現在`animals.json`だけを読み、`pubspec.yaml`も`assets/items/`を登録していない。
+
+1. [#29](https://github.com/SMRI2170/animal-shadow-match/issues/29) — 汎用ShadowItemと`items.json`のFlutterロードに移行。
+2. [#31](https://github.com/SMRI2170/animal-shadow-match/issues/31) — MiniMaxの成功Run IDと採用IDを指定し、背景除去・影/色WebP化・マスクQA・**Draft PR**を自動作成するパイプライン。
+3. PRの差分/影を人が確認してマージ、Flutterアプリを再ビルド。**マージだけでインストール済みアプリが自動更新されるわけではない**。
+
+詳細：[生成画像を実際の出題プールに反映する手順](GENERATED_ASSETS_TO_GAME_POOL_JA.md)。**#31は設計済み・ワークフロー実装はこれから。** すぐ反映する場合は手動/PR版の手順を参照。
+
 ## v6 — 非キャラクターのワンアセット方針（優先）
 
 正式仕様：[ぷにぷに物体・1原画像設計 v6](SINGLE_ASSET_OBJECT_GAME_JA.md)。**v5のキャラクター20枚+魔法のおもちゃ12枚の試作は取りやめ**、本番用画像は新試作の評価後に量産。Flutter実装とリポジトリ名は未変更。
