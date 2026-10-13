@@ -57,7 +57,7 @@ jobs:
   promote:
     name: Stage, validate and open Draft PR
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:
@@ -216,45 +216,54 @@ jobs:
       - name: Validate the updated catalog (alpha masks + ids)
         run: python scripts/validate_catalog.py
 
-      - name: Generate alpha+shadow preview contact sheet (PIL only)
+      - name: Validate Flutter bundle and tests before opening PR
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter analyze and unit/widget tests
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      - name: Generate color and shadow preview sheet
         env:
           PROMOTION_REPORT: ${{ runner.temp }}/promotion.json
         run: |
           set -euo pipefail
           python - <<'PY'
           import json
-          from pathlib import Path
           import os
-          import sys
+          from pathlib import Path
           from PIL import Image, ImageDraw
 
           report = json.loads(Path(os.environ["PROMOTION_REPORT"]).read_text())
           accepted = report.get("accepted", [])
           if not accepted:
-              print("no accepted items, skipping contact sheet")
-              raise SystemExit(0)
-          cell = 256
-          margin = 16
-          width = cell * len(accepted) + margin * (len(accepted) + 1)
-          height = cell + margin * 2
-          sheet = Image.new("RGB", (width, height), (255, 255, 255))
+              raise SystemExit("no accepted items; refusing to create an empty promotion")
+          size, gap, header = 220, 12, 28
+          width = gap + len(accepted) * (size * 2 + gap * 3)
+          height = size + gap * 2 + header
+          sheet = Image.new("RGB", (width, height), (245, 247, 249))
           draw = ImageDraw.Draw(sheet)
-          for index, entry in enumerate(accepted):
+          for i, entry in enumerate(accepted):
               item_id = entry["id"]
-              color_path = Path("assets/items", f"{item_id}.webp")
-              shadow_path = Path("assets/items", f"{item_id}_shadow.webp")
-              if not color_path.is_file() or not shadow_path.is_file():
-                  print(f"missing webp pair for {item_id}", file=sys.stderr)
-                  raise SystemExit(1)
-              color = Image.open(color_path).convert("RGBA").resize((cell - margin, cell - margin))
-              bg = Image.new("RGB", (cell, cell), (255, 255, 255))
-              x = (cell - color.width) // 2
-              y = (cell - color.height) // 2
-              bg.paste(color, (x, y), color)
-              sheet.paste(bg, (margin + index * (cell + margin), margin))
-              draw.text((margin + index * (cell + margin) + 8, margin + 4), item_id, fill=(40, 40, 40))
+              x0 = gap + i * (size * 2 + gap * 3)
+              draw.text((x0 + 3, 6), item_id, fill=(35, 45, 50))
+              for panel, suffix in enumerate(("", "_shadow")):
+                  path = Path("assets/items", f"{item_id}{suffix}.webp")
+                  with Image.open(path) as source:
+                      object_rgba = source.convert("RGBA")
+                      object_rgba.thumbnail((size - 16, size - 16))
+                  base = Image.new("RGB", (size, size), (255, 255, 255))
+                  base.paste(object_rgba, ((size - object_rgba.width) // 2,
+                                           (size - object_rgba.height) // 2),
+                             object_rgba)
+                  sheet.paste(base, (x0 + panel * (size + gap), header))
           sheet.save("assets/items/_preview.png", "PNG")
-          print("wrote preview sheet")
+          print("wrote color and silhouette preview sheet")
           PY
 
       # ------------------------------------------------------------
