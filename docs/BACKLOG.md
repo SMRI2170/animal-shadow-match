@@ -1,5 +1,7 @@
 # Implementation backlog — issues in order
 
+> **UI/UXの実装方針:** [UI/UX詳細設計 v2.0](UI_UX_SPEC_JA.md) を参照。既存 #2, #8, #9, #10, #11, #12 を詳細化し、初回ガイド・状態制御・保護者設定・子ども試遊の個別Issueを追加した。以下15件は旧来の基盤バックログで、新規Issueは別途 [GitHub Issues](https://github.com/SMRI2170/animal-shadow-match/issues) を参照。追加したIssue番号はGitHub上で確認すること。
+
 Each linked file is an import-ready GitHub Issue description. `P0` blocks public release, `P1` improves MVP quality, `P2` is post-release growth.
 
 | Order | Priority | Issue | Status |
