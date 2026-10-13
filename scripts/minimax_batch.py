@@ -170,6 +170,13 @@ def run(*, start: int, count: int, output: Path, dry_run: bool, region: str,
     key = os.getenv("MINIMAX_API_KEY", "").strip()
     if not key:
         raise RuntimeError("MINIMAX_API_KEY repository secret is missing. No calls made.")
+    # GitHub Actions uses the Go/M Plan Subscription Key so a standard
+    # pay-as-you-go key cannot accidentally spend account balance.
+    if os.getenv("MINIMAX_SUBSCRIPTION_ONLY", "0") == "1" and not key.startswith("sk-cp-"):
+        raise RuntimeError(
+            "MiniMax Subscription Key (sk-cp-) required; "
+            "pay-as-you-go keys blocked before any API call."
+        )
     for i, item in enumerate(plan):
         try:
             raw = fetch_image(item["prompt"], key, region=region)
