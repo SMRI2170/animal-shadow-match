@@ -1,0 +1,26 @@
+name: Development task
+description: MVP implementation task with acceptance criteria
+title: "[Task] "
+labels: []
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: State the user-visible outcome
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Implementation and files
+      description: Note the intended changes, boundaries, and dependencies
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Use precise checkboxes and tests
+    validations:
+      required: true
