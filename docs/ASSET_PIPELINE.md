@@ -55,3 +55,14 @@ At MVP scale, **human review is mandatory**. Prioritize ambiguity checks on *pai
 - Phase D: 200+ images only if file size and content quality remain acceptable.
 
 At hundreds of assets, record model name, generation date, prompt template version, reviewer, and license/commercial-use verification outside the game runtime. Store optimized source and shadow together; no AI-generated image needs to be fetched by the app.
+
+## v4: Image-to-game-feel metadata and art independence
+
+See [Game value and engagement v4](GAME_VALUE_AND_ENGAGEMENT_JA.md) and [Issue #26](https://github.com/SMRI2170/animal-shadow-match/issues/26).
+
+- Continue generating one full-body isolated animal per image. Do NOT require matching poses, expressions or multi-character scene compositing.
+- All five animals in the end-of-set parade reuse already generated transparent assets. Animated reactions use only Flutter transforms (small slide/rotation/scale).
+- Proposed optional catalog fields: reactionType (hop, sway, tilt, float, pulse; pulse default), habitat, silhouetteFeatures. Preserve compatibility with existing assets/catalog/animals.json.
+- Promote images only when a toddler can distinguish the resulting silhouette from every candidate at actual tile size.
+- Prefer 20 high-quality images to 100 incoherent or unclear silhouettes. Avoid near-duplicate target animals within the same set and ideally the prior two sets when enough images exist.
+- No randomized rare cosmetics, AI-generated loot boxes, or real-time API dependency.
