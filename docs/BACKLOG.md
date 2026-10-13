@@ -1,5 +1,19 @@
 # Implementation backlog — issues in order
 
+## v5 題材の差別化（デザインピボットの比較、未採用）
+
+**[比較設計 v5](THEME_PIVOT_EVALUATION_JA.md)**。既存の動物を乗り物/食べ物へ単純に置換するだけでは差別化が弱く、オリジナルキャラも既存アプリがあるため勝利は未確定。
+
+| 順序 | Issue | 目的 |
+|---:|---|---|
+| 1 | [#27](https://github.com/SMRI2170/animal-shadow-match/issues/27) | A 動物 / B ふしぎなともだち / C ふしぎなおもちゃ の差別化判断 |
+| 2 | [#28](https://github.com/SMRI2170/animal-shadow-match/issues/28) | MiniMaxでB20枚/C12枚を試作し96〜120dpの輪郭品質を比較 |
+| 3 | [#19](https://github.com/SMRI2170/animal-shadow-match/issues/19) | 子ども+保護者の同意のある少人数の比較試遊 |
+| 4 | [#13](https://github.com/SMRI2170/animal-shadow-match/issues/13) | ストア画面の理解度と検索語候補の確認（検索需要は未測定） |
+| 正式採用後 | 新規Issue予定 | ShadowItemモデル/素材/ストア名称へ移行。リポジトリ名変更は別途判断 |
+
+**先行して変更しないこと:** `SMRI2170/animal-shadow-match` リポジトリ名・8種の既存仮画像・Flutterコード・動物の本番画像大量生成。比較結果が出るまで残す。
+
 ## v4: 最小のゲーム価値強化（Issue登録済み）
 
 正本: [ゲーム価値と発見 v4](GAME_VALUE_AND_ENGAGEMENT_JA.md)。**Flutterに実装済みではない。**
