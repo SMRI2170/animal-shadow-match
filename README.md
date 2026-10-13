@@ -4,6 +4,8 @@ An offline, text-free animal silhouette matching game for children ages 2–5. B
 
 > **STATUS:** Design + initial playable Flutter prototype. All 8 bundled animal images are obvious **DEVELOPMENT PLACEHOLDERS**, not MiniMax-produced launch artwork. Target OS: Android first. No store release or policy approval has occurred.
 
+> **Product direction v6 (design; not yet implemented):** Switch the planned content from animals/characters to individual non-character squishy objects. One completed image per object + generated shadow, no bones/rigged animations or extra poses. Reusable effects: squish, wobble, bounce, inflate; optional clip-split prototype. The existing repo and demo Flutter implementation still use animals pending #29 migration.
+
 ## Product at a glance
 
 - **One action:** look at a colorful animal, then **tap** its matching silhouette.
@@ -36,6 +38,8 @@ On a Mac, add iOS scaffolding later with `flutter create --platforms=ios .`. Do 
 - [**Game value and intrinsic play v4.0 (日本語)**](docs/GAME_VALUE_AND_ENGAGEMENT_JA.md) — animal-specific reactions, interactive five-animal parade, content freshness, age-appropriate playtesting
 
 - [**Theme differentiation proposal v5 (日本語)**](docs/THEME_PIVOT_EVALUATION_JA.md) — compare animals vs original soft 3D fantasy friends vs magical toys; no rename or asset migration yet.
+
+- [**Single-asset interactive object game v6 (日本語)**](docs/SINGLE_ASSET_OBJECT_GAME_JA.md) — art direction, no-rig FX API, item model, 30-asset trial and implementation gates
 
 ## MiniMax art workflow
 
