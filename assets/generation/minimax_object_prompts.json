@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "model": "image-01",
+  "style": "One single complete non-character tactile object. Soft 3D clay-toy illustration, gentle pastel palette, child-friendly, clean studio render. Centered square composition, entire object visible with generous empty margin, one isolated subject, plain uniform off-white background suitable for background removal, clear distinctive outer silhouette, soft diffuse lighting, no cast shadow. No face, eyes, mouth, hands, feet, animals, human figures, accessories, letters, logos, labels, watermarks, collage, or multiple objects.",
+  "items": [
+    {
+      "id": "gel_star",
+      "category": "jelly",
+      "shape": "a rounded five-point star with thick soft tips and a wavy edge",
+      "material": "translucent raspberry jelly",
+      "effectPreset": "squish"
+    },
+    {
+      "id": "cloud_cushion",
+      "category": "jelly",
+      "shape": "a puffy cloud shape with four large scalloped bumps",
+      "material": "matte lilac marshmallow foam",
+      "effectPreset": "squish"
+    },
+    {
+      "id": "teardrop_gummy",
+      "category": "jelly",
+      "shape": "a giant pear-shaped teardrop with a rounded point",
+      "material": "soft mint gummy gel",
+      "effectPreset": "wobble"
+    },
+    {
+      "id": "twist_gummy",
+      "category": "jelly",
+      "shape": "an S-shaped chunky twisted ribbon with thick smooth ends",
+      "material": "pastel peach gummy",
+      "effectPreset": "wobble"
+    },
+    {
+      "id": "squish_ring",
+      "category": "jelly",
+      "shape": "a thick wobbly donut ring with a large central opening",
+      "material": "lavender silicone jelly",
+      "effectPreset": "squish"
+    },
+    {
+      "id": "wave_cushion",
+      "category": "jelly",
+      "shape": "a wide three-crest rolling wave shape",
+      "material": "pale yellow sponge foam",
+      "effectPreset": "squish"
+    },
+    {
+      "id": "jelly_cube",
+      "category": "jelly",
+      "shape": "an irregular rounded cube with a single scalloped face",
+      "material": "translucent turquoise gel",
+      "effectPreset": "inflate"
+    },
+    {
+      "id": "soft_moon",
+      "category": "jelly",
+      "shape": "a thick crescent moon with short rounded horns",
+      "material": "pastel blue foam",
+      "effectPreset": "bounce"
+    },
+    {
+      "id": "gummy_heart",
+      "category": "jelly",
+      "shape": "a lopsided thick heart with wide rounded lobes",
+      "material": "rose pink gummy",
+      "effectPreset": "inflate"
+    },
+    {
+      "id": "blob_pebble",
+      "category": "jelly",
+      "shape": "a squashed oval with three large asymmetric rounded protrusions",
+      "material": "orange soft putty",
+      "effectPreset": "wobble"
+    },
+    {
+      "id": "pillow_cross",
+      "category": "jelly",
+      "shape": "a plump cross with four short round arms",
+      "material": "sky blue velvet foam",
+      "effectPreset": "squish"
+    },
+    {
+      "id": "jelly_shell",
+      "category": "jelly",
+      "shape": "a thick spiral shell shape with a broad outward curl",
+      "material": "yellow translucent jelly",
+      "effectPreset": "wobble"
+    },
+    {
+      "id": "twisted_loop",
+      "category": "toys",
+      "shape": "a thick asymmetrical figure-eight loop with two open holes",
+      "material": "pastel rubber toy",
+      "effectPreset": "wobble"
+    },
+    {
+      "id": "bubble_paddle",
+      "category": "toys",
+      "shape": "a round paddle shape with four large raised domes and one short rounded handle",
+      "material": "soft silicone toy",
+      "effectPreset": "squish"
+    },
+    {
+      "id": "stacked_disks",
+      "category": "toys",
+      "shape": "a single sculptural object of three fused thick offset circular disks",
+      "material": "matte blue polymer clay",
+      "effectPreset": "bounce"
+    },
+    {
+      "id": "knob_ball",
+      "category": "toys",
+      "shape": "a globe with exactly five large rounded knobs protruding unevenly",
+      "material": "soft purple rubber",
+      "effectPreset": "inflate"
+    },
+    {
+      "id": "wavy_disc",
+      "category": "toys",
+      "shape": "a wide circular disk with a ruffled scalloped perimeter",
+      "material": "warm yellow soft rubber",
+      "effectPreset": "wobble"
+    },
+    {
+      "id": "fat_spring",
+      "category": "toys",
+      "shape": "a broad loose coil shaped like a single thick upright spring",
+      "material": "coral foam toy",
+      "effectPreset": "bounce"
+    },
+    {
+      "id": "tri_lobed_ring",
+      "category": "toys",
+      "shape": "a triangular donut with three large rounded lobes and a central opening",
+      "material": "pastel seafoam silicone",
+      "effectPreset": "squish"
+    },
+    {
+      "id": "puzzle_bean",
+      "category": "toys",
+      "shape": "a fat bean shape with a wide notch on one side",
+      "material": "smooth mint polymer clay",
+      "effectPreset": "bounce"
+    },
+    {
+      "id": "spiral_cone",
+      "category": "toys",
+      "shape": "a stout cone with one chunky external spiral winding around it",
+      "material": "lilac rubber toy",
+      "effectPreset": "wobble"
+    },
+    {
+      "id": "bubble_arch",
+      "category": "toys",
+      "shape": "a tall arch shape with two thick legs and a round top",
+      "material": "pale pink squishy foam",
+      "effectPreset": "squish"
+    },
+    {
+      "id": "soft_planet",
+      "category": "cosmic",
+      "shape": "a planet sphere with one very thick tilted ring physically joined to it",
+      "material": "peach-tinted soft resin",
+      "effectPreset": "inflate"
+    },
+    {
+      "id": "foam_crystal",
+      "category": "cosmic",
+      "shape": "a chunky six-sided crystal prism with intentionally softened blunt facets",
+      "material": "mint clay mineral",
+      "effectPreset": "bounce"
+    },
+    {
+      "id": "cloud_asteroid",
+      "category": "cosmic",
+      "shape": "an irregular small asteroid pebble with two large round hollows",
+      "material": "lavender fuzzy foam",
+      "effectPreset": "wobble"
+    },
+    {
+      "id": "drop_meteor",
+      "category": "cosmic",
+      "shape": "a teardrop-like meteor with two short fat trailing tails merged into one solid toy",
+      "material": "pink and blue matte clay",
+      "effectPreset": "bounce"
+    },
+    {
+      "id": "moon_stone",
+      "category": "cosmic",
+      "shape": "a crescent-shaped porous pebble with asymmetrical thick ends",
+      "material": "light yellow stone-like putty",
+      "effectPreset": "wobble"
+    },
+    {
+      "id": "soft_comet",
+      "category": "cosmic",
+      "shape": "a plump comet shape with one large rounded head and a short tapering thick tail",
+      "material": "turquoise gummy resin",
+      "effectPreset": "bounce"
+    },
+    {
+      "id": "arc_crystal",
+      "category": "cosmic",
+      "shape": "a chunky bent crystal arc resembling a squared horseshoe",
+      "material": "pink translucent resin",
+      "effectPreset": "squish"
+    },
+    {
+      "id": "petal_stone",
+      "category": "cosmic",
+      "shape": "a single pebble sculpture with five broad integrated petals",
+      "material": "pastel blue soft ceramic-like toy",
+      "effectPreset": "inflate"
+    }
+  ]
+}
