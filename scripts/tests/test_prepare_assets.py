@@ -59,6 +59,18 @@ class PrepareAssetTests(unittest.TestCase):
                 diff = ImageChops.difference(a_c, a_s)
                 self.assertIsNone(diff.getbbox())
 
+    def test_background_removal_draft_keeps_original_catalog_id(self):
+        # rembg emits gel_star_rembg.png; exported assets still use gel_star.
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "gel_star_rembg.png"
+            _make_transparent_png(source)
+            destination = Path(temp) / "out"
+            processed_id = pa.process_file(source, destination, output_stem="gel_star")
+            self.assertEqual(processed_id, "gel_star")
+            self.assertTrue((destination / "gel_star.webp").is_file())
+            self.assertTrue((destination / "gel_star_shadow.webp").is_file())
+            self.assertFalse((destination / "gel_star_rembg.webp").exists())
+
     def test_process_file_rejects_opaque_image(self):
         with tempfile.TemporaryDirectory() as temp:
             source = Path(temp) / "opaque_thing.png"
