@@ -16,6 +16,8 @@ An offline, text-free animal silhouette matching game for children ages 2–5. B
 
 > **Game design v4 (planned, not yet implemented):** correct silhouette → animal-specific gentle motion → after five matches, an interactive five-animal parade; the child may continue or rest. No random rewards, loot boxes, score pressure, ads or forced watch-time.
 
+> **Theme candidate v5 (NOT IMPLEMENTED):** Consider replacing animals with unique, gentle fantasy friends after comparison with magical toys and the animal baseline. The existing repository, data and Flutter implementation remain unchanged pending #27/#28 evidence.
+
 ## Project setup
 
 Requires a current stable Flutter SDK with Dart >=3.6. The checked-in repository contains shared Flutter source and demo assets; platform-specific folders are generated locally to avoid checking in untested native configurations.
@@ -32,6 +34,8 @@ flutter run
 On a Mac, add iOS scaffolding later with `flutter create --platforms=ios .`. Do **not** run `flutter create --overwrite` or overwrite the checked-in lib/ files.
 
 - [**Game value and intrinsic play v4.0 (日本語)**](docs/GAME_VALUE_AND_ENGAGEMENT_JA.md) — animal-specific reactions, interactive five-animal parade, content freshness, age-appropriate playtesting
+
+- [**Theme differentiation proposal v5 (日本語)**](docs/THEME_PIVOT_EVALUATION_JA.md) — compare animals vs original soft 3D fantasy friends vs magical toys; no rename or asset migration yet.
 
 ## MiniMax art workflow
 
