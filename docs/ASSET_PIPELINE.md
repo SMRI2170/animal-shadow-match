@@ -66,3 +66,14 @@ See [Game value and engagement v4](GAME_VALUE_AND_ENGAGEMENT_JA.md) and [Issue #
 - Promote images only when a toddler can distinguish the resulting silhouette from every candidate at actual tile size.
 - Prefer 20 high-quality images to 100 incoherent or unclear silhouettes. Avoid near-duplicate target animals within the same set and ideally the prior two sets when enough images exist.
 - No randomized rare cosmetics, AI-generated loot boxes, or real-time API dependency.
+
+## v6 active art specification: one finished object image, no skeleton
+
+See [Single-asset object game v6](SINGLE_ASSET_OBJECT_GAME_JA.md), [Issue #28](https://github.com/SMRI2170/animal-shadow-match/issues/28), [Issue #29](https://github.com/SMRI2170/animal-shadow-match/issues/29). Earlier animal/character examples above are **historical prototype instructions**, not current production requirements.
+
+- Use MiniMax to render **one complete, isolated non-character tactile object** per original image: gel star, squishy cloud, soft cube, twist ring, playful planet, etc. No face, humanoid limbs, character rig, separate poses or frame-by-frame sequence.
+- For each selected source, manually verify background extraction, then produce optimized color WebP and shadow WebP from the **same alpha mask**. One authored picture; the shadow is generated mechanically.
+- Metadata: `ShadowItem.effectPreset = squish|wobble|bounce|inflate` (optional spin/pop/split later); missing values default to squish. Do not rely on per-object manually animated parts.
+- `Transform.scale` X/Y, `Transform.rotate`, `Transform.translate`, `AnimatedScale`, and optional `ClipRect` for a two-piece separation effect (P1) are the implementation primitives. True cut-open interior or 3D turn requires additional art and is out of MVP scope.
+- Generate **30 prototype images before mass production:** 12 jelly/gummy/cushion + 10 surreal toys + 8 nature/space-like objects. Only approved shadow shapes enter the initial release.
+- Content approval: shape is recognizably different at 96–120dp from its distractors, image has clean mask, no copyrighted character/brand, effect looks believable and gentle.
