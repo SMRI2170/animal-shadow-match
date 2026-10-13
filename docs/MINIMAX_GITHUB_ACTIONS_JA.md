@@ -1,5 +1,14 @@
 # GitHub Actions × MiniMax 画像量産手順（2026-10-14）
 
+## GitHub Actions警告への対応（2026-10-14）
+
+過去の実行で `Node.js 20 is deprecated` と `ubuntu-latest`→Ubuntu 26.04 の移行通知が出る場合がある。これらはそれ自体では画像生成失敗を示さず、ジョブが緑の `Success` ならその**実行した手順**は正常終了している。
+
+現在の構成は両方のワークフローで`actions/checkout@v7`、`actions/setup-python@v7`（Artifactは`actions/upload-artifact@v7`）、`runs-on: ubuntu-24.04`を指定。GitHub公式Node 24対応版と安定したUbuntuイメージに固定している。**以前のRun画面の警告表示は過去の実行記録なので消えない**。次回新しいmainで実行すると新しい設定が使われる。
+
+`Success` でも`dry_run=true`なら候補レポートだけで画像ファイルは生成されない。結果の確認方法：実行ログで`Dry run (NO API, NO CHARGE)`なのか`Generate paid images with MiniMax`なのかを区別し、画面下のArtifactsで実画像（.jpg/.png/.webp）の有無を確認する。実画像生成の場合はSubscription Keyの残枠/追加Creditsを確認してから再実行する。
+
+
 ## 2026-10-14 実装状態と実行の境界
 
 - ✅ MiniMax Image-01へのリクエスト処理・最大6枚・Subscription Key形式ガード・dry-run・Artifacts一時保存をGitHubへコミット済み。
