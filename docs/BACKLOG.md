@@ -22,6 +22,22 @@ Each linked file is an import-ready GitHub Issue description. `P0` blocks public
 | 14 | P1 | [[P1][Release] Android内部テスト公開と最終ゲート](issues/14-task.md) | To do / scaffold partial |
 | 15 | P2 | [[P2][Growth] 検索流入30〜60日検証](issues/15-task.md) | To do / scaffold partial |
 
+## UI/UX改修：実際のGitHub Issue（v2.0）
+ 
+| 優先順 | Issue | 実装の目的 | 依存 |
+|---:|---|---|---|
+| 1 | [#2 プレイ画面](https://github.com/SMRI2170/animal-shadow-match/issues/2) | 星の撤去・2/3/4択の大きなタイル | #1 |
+| 2 | [#17 状態機械](https://github.com/SMRI2170/animal-shadow-match/issues/17) | 連打・タイマー・復帰の防御 | #2 と並行可 |
+| 3 | [#16 初回ガイド](https://github.com/SMRI2170/animal-shadow-match/issues/16) | 無言の手アニメと無操作ヒント | #2, #17 |
+| 4 | [#8 反応](https://github.com/SMRI2170/animal-shadow-match/issues/8) | 影がカラーへ変わる成功・控えめな誤答 | #17 |
+| 5 | [#9 進捗](https://github.com/SMRI2170/animal-shadow-match/issues/9) | 非表示の適応難易度・ローカル保存 | #3 |
+| 6 | [#10 画面対応](https://github.com/SMRI2170/animal-shadow-match/issues/10) | 360dp〜タブレットの視認性 | #2 |
+| 7 | [#18 保護者領域](https://github.com/SMRI2170/animal-shadow-match/issues/18) | 子ども向けUIから設定等を隔離 | #12, #10 |
+| 8 | [#11 テスト](https://github.com/SMRI2170/animal-shadow-match/issues/11) | Golden / Widget / 状態遷移の検証 | 各UI Issue |
+| 9 | [#19 子ども試遊](https://github.com/SMRI2170/animal-shadow-match/issues/19) | 初見UXを検証し修正 | #2, #16, #17, #8, #10 |
+
+**注意:** UXの正本は[UI/UX仕様 v2.0](UI_UX_SPEC_JA.md)。試遊は[記録テンプレート](UX_PLAYTEST_TEMPLATE.md)に従い匿名記録。上記は**Issueとして登録済み、実装済みを意味しない**。
+
 ## Suggested release sequence
 
 **Sprint 0:** #01–#04: playable Android + UI and catalog contracts.
@@ -34,4 +50,4 @@ Each linked file is an import-ready GitHub Issue description. `P0` blocks public
 
 **After launch:** #15 search discovery measurement and iteration.
 
-Note: `#01` here is a planned issue ID in this folder, not an actual GitHub issue number until imported.
+Note: 初期15件は GitHub Issues #1〜#15 として登録済み。docs/issues/XX-task.md は当初の原稿であり、追加の詳細はGitHub Issue本文に反映した。
