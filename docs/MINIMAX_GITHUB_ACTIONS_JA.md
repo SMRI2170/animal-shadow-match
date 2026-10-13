@@ -1,6 +1,20 @@
 # GitHub Actions × MiniMax 画像量産手順（2026-10-14）
 
-**状態:** ワークフロー・生成スクリプト・30物体の候補JSON・オフラインテストを登録。**実際の有料生成は未実行**（GitHub Secret未設定、かつツール側に任意のActions実行機能がない）。30候補はすべて未審査のプロンプト案。
+## MiniMax Go (M Plan) 利用者向け — 最優先（2026-10-14）
+
+公式[M Plan](https://www.minimax.io/m-plan)によると、**Goプランにも画像生成とAPIキー利用が含まれています**。従来の「画像生成APIは必ず別途従量課金」という説明は正確ではありません。Goプランで生成する場合はMiniMaxの **Subscription Key (通常 `sk-cp-` で始まるもの)** を利用し、**標準のPay-as-you-go API Keyを使用しない**でください。
+
+このGitHub Actionsは `MINIMAX_SUBSCRIPTION_ONLY=1` を設定し、`sk-cp-` 以外のキーを**API通信前に拒否**します。Secret名は引き続き `MINIMAX_API_KEY` ですが、入れるのはGoプランのSubscription Keyです。キーの文字列をIssue/PR/Chatに貼らないでください。
+
+**請求について:** Subscription KeyはGoの利用枠を先に使用し、枠を使い切ると**購入済みの追加Credits**を消費する場合があります。どのモデルがGoの残枠を使えるか・image-01の具体的な上限はアカウントのUsage表示で確認してください。**Goなら30枚が必ず追加費用ゼロという保証はありません。** 残枠が不明ならdry-runでAPI未実行を確認後、count=1のみ実行しUsage履歴を比較します。Subscription Keyが画像APIで利用不可というエラーなら、**Pay-as-you-go Keyへ切り替えず**、MiniMax公式の現在の対応モデルを確認してください。
+
+- [M Plan公式](https://www.minimax.io/m-plan)
+- [残枠・Usage](https://platform.minimax.io/)（ログイン後Usage/Plan）
+- [MiniMax API有料サービス規約](https://platform.minimax.io/protocol/paid-agreement) — Subscription KeyとPay-as-you-go Keyは別。
+- Run workflow: [画像候補生成](https://github.com/SMRI2170/animal-shadow-match/actions/workflows/minimax-images.yml)
+
+
+**状態:** ワークフロー・生成スクリプト・30物体の候補JSON・オフラインテストを登録。**実際の生成は未検証**（GitHub Secretは本書から確認できないため、設定済みか不明。生成成功も未確認）。30候補はすべて未審査のプロンプト案。
 
 ## 何ができるか
 [GitHub Actions: MiniMax - Generate object candidates](../.github/workflows/minimax-images.yml) を手動実行して、MiniMax image-01 に1枚ずつ独立した「ぷにぷに物体」の完成画像を生成。結果は7日間の Actions Artifact に保存する。手元のPCは不要。APIキーはGitHub Secretsから読み込み、ソースコード・アーティファクト・ログに書き出さない。
@@ -9,11 +23,11 @@
 
 ## 1. APIキーの登録（ユーザー自身で操作）
 
-1. MiniMax Open Platformで**APIキーを新しく発行**する。MiniMaxのWeb UIサブスクリプションやアプリ内ポイントが、そのままAPI課金に使えるとは限らない。
+1. MiniMax Go（M Plan）のSubscription Key（通常 `sk-cp-` で始まるもの）を取得する。**従量課金用の別のAPI Keyは登録しない**。
 2. [リポジトリのActions Secrets](https://github.com/SMRI2170/animal-shadow-match/settings/secrets/actions) を開く。
-3. **New repository secret** を選び、名前 `MINIMAX_API_KEY`、値に発行したAPIキーを入力。キーはIssue/PR/README/チャットに貼らない。
+3. **New repository secret** を選び、名前 `MINIMAX_API_KEY`、値にGoプランのSubscription Keyを入力。キーはIssue/PR/README/チャットに貼らない。
 4. MiniMaxアカウントのリージョンに合わせて `intl`（`api.minimax.io`）または `cn`（`api.minimaxi.com`）をワークフローで指定。公式サービス以外の任意API URLは受け付けない。
-5. APIキーの利用範囲と課金上限・請求通知が設定可能ならMiniMax側で制限する。
+5. Goの残り利用枠と追加Credits残高を確認する。Subscription Keyは枠超過時に購入済みCreditsを使う可能性があるため、初回は1枚だけ実行しUsage履歴を比較する。
 
 ## 2. 最初のテスト（課金なし）
 
@@ -80,5 +94,5 @@ python scripts/minimax_batch.py --start 0 --count 1
 - [GitHub Actions workflow_dispatch](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onworkflow_dispatch)
 - [GitHub Actions security and secrets](https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions)
 
-## 未実施事項
-MiniMaxの実キーが未登録、テストのActions実行は未実施、**APIを実際に課金して画像生成したことはない**。リポジトリへのコード登録と、CI/Actionsの正常終了を区別する。
+## 未確認事項
+GoのSubscription Keyがこのアカウントに登録されたか、GitHub Actionsが実際に成功したか、image-01リクエストがGo利用枠として処理されたかは未確認。**コードをGitHubへ登録したことと、実際の生成成功や料金0円を区別する。**
