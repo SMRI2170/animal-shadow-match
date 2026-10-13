@@ -14,6 +14,8 @@ An offline, text-free animal silhouette matching game for children ages 2–5. B
 - **Offline by default:** no ads, analytics, account, networking, or in-app purchases in MVP.
 - **Deterministic content:** each shadow is created from the exact same transparent animal image, never independently generated.
 
+> **Game design v4 (planned, not yet implemented):** correct silhouette → animal-specific gentle motion → after five matches, an interactive five-animal parade; the child may continue or rest. No random rewards, loot boxes, score pressure, ads or forced watch-time.
+
 ## Project setup
 
 Requires a current stable Flutter SDK with Dart >=3.6. The checked-in repository contains shared Flutter source and demo assets; platform-specific folders are generated locally to avoid checking in untested native configurations.
@@ -28,6 +30,8 @@ flutter run
 ```
 
 On a Mac, add iOS scaffolding later with `flutter create --platforms=ios .`. Do **not** run `flutter create --overwrite` or overwrite the checked-in lib/ files.
+
+- [**Game value and intrinsic play v4.0 (日本語)**](docs/GAME_VALUE_AND_ENGAGEMENT_JA.md) — animal-specific reactions, interactive five-animal parade, content freshness, age-appropriate playtesting
 
 ## MiniMax art workflow
 
