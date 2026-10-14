@@ -1,0 +1,55 @@
+name: MiniMax - ChatGPT prompt controller
+
+# The controller issue is a public command inbox, not a credentials store.
+# Only a new owner-authored comment on Issue #33 can enter this job.
+# One JSON command can generate at most one image and must explicitly opt in.
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: minimax-manual-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    name: Run one authenticated MiniMax prompt
+    if: >-
+      github.repository == 'SMRI2170/animal-shadow-match' &&
+      github.event.issue.number == 33 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == 'SMRI2170' &&
+      github.event.sender.login == 'SMRI2170' &&
+      startsWith(github.event.comment.body, '/minimax ')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install image validation
+        run: python -m pip install -r scripts/requirements.txt
+
+      - name: Validate comment and generate (only explicit opt-in calls API)
+        env:
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          MINIMAX_SUBSCRIPTION_ONLY: '1'
+        run: |
+          python scripts/minimax_chat_command.py
+
+      - name: Save unreviewed image or dry-run report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: minimax-review-${{ github.run_id }}
+          path: generated/minimax/
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 6
