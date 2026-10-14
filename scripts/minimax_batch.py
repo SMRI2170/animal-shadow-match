@@ -63,13 +63,18 @@ def select_items(catalog: dict, start: int, count: int) -> list[dict]:
 
 
 def make_prompt(catalog: dict, item: dict) -> str:
-    prompt = (
-        f'{catalog["style"]} '
-        f'Object shape: {item["shape"]}. '
-        f'Material appearance: {item["material"]}.'
-    )
-    if len(prompt) > 1500:
-        raise ValueError(f'{item["id"]}: prompt exceeds 1500 characters')
+    # Chat-authored prompts are used as-is, without replacing the 30
+    # curated catalog prompts or wrapping them in a second style block.
+    if "customPrompt" in item:
+        prompt = item["customPrompt"]
+    else:
+        prompt = (
+            f'{catalog["style"]} '
+            f'Object shape: {item["shape"]}. '
+            f'Material appearance: {item["material"]}.'
+        )
+    if not isinstance(prompt, str) or not 20 <= len(prompt) <= 1500:
+        raise ValueError(f'{item["id"]}: prompt must be 20-1500 characters')
     return prompt
 
 
@@ -134,8 +139,38 @@ def save_image(raw: bytes, target: Path) -> str:
 
 
 def run(*, start: int, count: int, output: Path, dry_run: bool, region: str,
-        catalog_file: Path = CATALOG) -> list[dict]:
-    catalog = read_catalog(catalog_file)
+        catalog_file: Path = CATALOG, custom_request: dict | None = None) -> list[dict]:
+    if custom_request is None:
+        catalog = read_catalog(catalog_file)
+    else:
+        # The chat controller accepts exactly one newly authored image.
+        # Validate all fields before creating an artifact or invoking the API.
+        if start != 0 or count != 1:
+            raise ValueError("Custom prompt jobs must generate exactly one image")
+        item_id = custom_request.get("id")
+        preset = custom_request.get("effectPreset")
+        category = custom_request.get("category")
+        prompt = custom_request.get("prompt")
+        if (not isinstance(item_id, str) or len(item_id) > 64
+                or re.fullmatch(r"[a-z][a-z0-9_]*", item_id) is None):
+            raise ValueError("Unsafe custom item ID")
+        if preset not in {"squish", "wobble", "bounce", "inflate"}:
+            raise ValueError("Unsupported custom effectPreset")
+        if (not isinstance(category, str) or len(category) > 40
+                or re.fullmatch(r"[a-z][a-z0-9_]*", category) is None):
+            raise ValueError("Unsafe custom category")
+        if not isinstance(prompt, str) or not 20 <= len(prompt) <= 1500:
+            raise ValueError("Invalid custom prompt length")
+        catalog = {
+            "model": "image-01",
+            "style": "",
+            "items": [{
+                "id": item_id,
+                "category": category,
+                "effectPreset": preset,
+                "customPrompt": prompt,
+            }],
+        }
     items = select_items(catalog, start, count)
     if region not in REGION_ENDPOINTS:
         raise ValueError("Invalid region")
