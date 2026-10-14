@@ -1,0 +1,375 @@
+name: Promote MiniMax artifacts to the item pool (Draft PR)
+
+# This workflow is the human-gated bridge between the MiniMax image-generation
+# workflow and the Flutter item pool. It is *only* triggered on manual
+# `workflow_dispatch`. It must:
+#
+# * never read a MiniMax API key — that lives in the generation workflow only;
+# * only run inside this repository (no fork access);
+# * only download artifacts from the production generation workflow;
+# * create a Draft Pull Request so reviewers — not automation — decide
+#   when an item ships. Auto-merging is intentionally absent.
+#
+# Decisions documented in docs/GENERATED_ASSETS_TO_GAME_POOL_JA.md §"完成形"
+# and docs/MINIMAX_GITHUB_ACTIONS_JA.md.
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Run id of the successful minimax-images.yml workflow (numeric).'
+        required: true
+        type: string
+      source_workflow:
+        description: 'Filename of the generation workflow.'
+        required: true
+        default: 'minimax-images.yml'
+        type: string
+      approved_ids:
+        description: >-
+          Comma-separated candidate ids (e.g. "gel_star,cloud_cushion") that
+          are approved for promotion. Unknown ids are rejected.
+        required: true
+        type: string
+      background_mode:
+        description: 'How to handle opaque images.'
+        required: true
+        default: 'auto_draft'
+        type: choice
+        options:
+          - auto_draft
+          - already_transparent
+
+# Only permissions explicitly listed here are granted. The job needs:
+# * contents:write     — create the branch and PR contents.
+# * pull-requests:write — open the Draft PR.
+# * actions:read        — read the source workflow run.
+# We deliberately do NOT grant `id-token`, `packages`, or `security-events`.
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: promote-minimax-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Stage, validate and open Draft PR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # We must operate on a branch, not a detached checkout, so the PR
+          # branch push below succeeds.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install offline asset tools
+        run: python -m pip install -r scripts/requirements.txt
+
+      # ------------------------------------------------------------
+      # Stage 1: pull the approved artifact into a scratch directory
+      # ------------------------------------------------------------
+
+      - name: Confirm the requested run is on this repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.source_run_id }}
+          WORKFLOW: ${{ inputs.source_workflow }}
+        run: |
+          set -euo pipefail
+          if [[ "${WORKFLOW}" != "minimax-images.yml" ]]; then
+            echo "Only minimax-images.yml may be used as a source" >&2
+            exit 1
+          fi
+          if [[ ! "${RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo "source_run_id must be a numeric GitHub Actions run id" >&2
+            exit 1
+          fi
+          owner="${GITHUB_REPOSITORY%/*}"
+          name="${GITHUB_REPOSITORY##*/}"
+          meta="$(gh api "/repos/${owner}/${name}/actions/runs/${RUN_ID}" --jq '{status,conclusion,path,event,head_branch}')"
+          status="$(echo "${meta}" | python -c 'import sys,json;print(json.load(sys.stdin)["status"])')"
+          conclusion="$(echo "${meta}" | python -c 'import sys,json;print(json.load(sys.stdin)["conclusion"])')"
+          path="$(echo "${meta}" | python -c 'import sys,json;print(json.load(sys.stdin)["path"])')"
+          event="$(echo "${meta}" | python -c 'import sys,json;print(json.load(sys.stdin)["event"])')"
+          head_branch="$(echo "${meta}" | python -c 'import sys,json;print(json.load(sys.stdin)["head_branch"])')"
+          if [[ "${status}" != "completed" || "${conclusion}" != "success" ||
+                "${path}" != ".github/workflows/minimax-images.yml" ||
+                "${event}" != "workflow_dispatch" ||
+                "${head_branch}" != "main" ]]; then
+            echo "Source must be a successful manual minimax-images.yml run from main" >&2
+            exit 1
+          fi
+
+      - name: Download the artifact into a scratch directory
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY%/*}"
+          name="${GITHUB_REPOSITORY##*/}"
+          mkdir -p "$RUNNER_TEMP/minimax-artifact"
+          gh run download "${RUN_ID}" --repo "${owner}/${name}" \
+            --name "minimax-review-${RUN_ID}" \
+            --dir "$RUNNER_TEMP/minimax-artifact"
+          # The artifact must contain a report.json generated by
+          # scripts/minimax_batch.py.
+          test -f "$RUNNER_TEMP/minimax-artifact/report.json" || { echo "report.json missing from artifact" >&2; exit 1; }
+
+      # ------------------------------------------------------------
+      # Stage 2: filter the artifact down to the approved ids
+      # ------------------------------------------------------------
+
+      - name: Stage only the approved ids
+        env:
+          APPROVED: ${{ inputs.approved_ids }}
+          ARTIFACT_DIR: ${{ runner.temp }}/minimax-artifact
+          STAGING_DIR: ${{ runner.temp }}/staging
+        run: |
+          set -euo pipefail
+          rm -rf "$STAGING_DIR" && mkdir -p "$STAGING_DIR"
+          python - <<'PY'
+          import json, os, re, sys
+          from pathlib import Path
+          from PIL import Image
+
+          approved = [t.strip() for t in os.environ["APPROVED"].split(",") if t.strip()]
+          valid = re.compile(r"^[a-z0-9_]+$")
+          if not 1 <= len(approved) <= 6 or len(set(approved)) != len(approved):
+              raise SystemExit("approved_ids must contain 1-6 distinct ids")
+          for item in approved:
+              if len(item) > 64 or not valid.fullmatch(item):
+                  raise SystemExit(f"rejecting unsafe id {item!r}")
+          report = json.loads(Path(os.environ["ARTIFACT_DIR"], "report.json").read_text())
+          items = report.get("items", [])
+          if report.get("dry_run") or not isinstance(items, list):
+              raise SystemExit("expected a real generation report")
+          if len({entry.get("id") for entry in items}) != len(items):
+              raise SystemExit("duplicate candidate ids in report")
+          by_id = {entry["id"]: entry for entry in items}
+          artifact_root = Path(os.environ["ARTIFACT_DIR"]).resolve()
+          staging = Path(os.environ["STAGING_DIR"])
+          for item in approved:
+              if item not in by_id:
+                  raise SystemExit(f"unknown approved id: {item}")
+              spec = by_id[item]
+              if spec.get("status") != "generated_unreviewed":
+                  raise SystemExit(f"{item}: not a generated image")
+              filename = spec.get("file")
+              if not isinstance(filename, str):
+                  raise SystemExit(f"{item}: missing filename")
+              rel = Path(filename)
+              if (rel.name != filename or rel.stem != item
+                  or rel.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}):
+                  raise SystemExit(f"{item}: unsafe or unexpected filename")
+              src = artifact_root / filename
+              if (src.is_symlink() or not src.is_file()
+                  or not src.resolve().is_relative_to(artifact_root)
+                  or not 0 < src.stat().st_size <= 12 * 1024 * 1024):
+                  raise SystemExit(f"{item}: invalid source image")
+              # Normalize PNG/JPEG/WEBP to real RGBA PNGs. prepare_assets.py
+              # processes *.png only, and never receives mislabeled JPEG bytes.
+              with Image.open(src) as original:
+                  original.load()
+                  if (min(original.size) < 512 or max(original.size) > 4096
+                      or original.format not in {"PNG", "JPEG", "WEBP"}):
+                      raise SystemExit(f"{item}: unsupported image dimensions/format")
+                  original.convert("RGBA").save(staging / f"{item}.png", format="PNG")
+              print(f"staged {item}.png")
+          PY
+
+      - name: Install CPU background removal when requested
+        if: ${{ inputs.background_mode == 'auto_draft' }}
+        run: python -m pip install 'rembg[cpu]>=2.0.67,<3'
+
+      - name: Process images into WebP color + shadow
+        env:
+          STAGING_DIR: ${{ runner.temp }}/staging
+        run: |
+          set -euo pipefail
+          python scripts/prepare_assets.py \
+            --input "$STAGING_DIR" \
+            --output assets/items \
+            --ids "${{ inputs.approved_ids }}" \
+            --bg-mode "${{ inputs.background_mode }}" \
+            --strict
+
+      - name: Append entries to assets/catalog/items.json
+        env:
+          STAGING_DIR: ${{ runner.temp }}/staging
+          RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          python scripts/promote_minimax_assets.py \
+            --staging-dir "$STAGING_DIR" \
+            --source-run-id "$RUN_ID" \
+            --artifact-name "minimax-review-$RUN_ID" \
+            --report-path "${{ runner.temp }}/promotion.json"
+
+      - name: Validate the updated catalog (alpha masks + ids)
+        run: python scripts/validate_catalog.py
+
+      - name: Validate Flutter bundle and tests before opening PR
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter analyze and unit/widget tests
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      - name: Generate color and shadow preview sheet
+        env:
+          PROMOTION_REPORT: ${{ runner.temp }}/promotion.json
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from PIL import Image, ImageDraw
+
+          report = json.loads(Path(os.environ["PROMOTION_REPORT"]).read_text())
+          accepted = report.get("accepted", [])
+          if not accepted:
+              raise SystemExit("no accepted items; refusing to create an empty promotion")
+          size, gap, header = 220, 12, 28
+          width = gap + len(accepted) * (size * 2 + gap * 3)
+          height = size + gap * 2 + header
+          sheet = Image.new("RGB", (width, height), (245, 247, 249))
+          draw = ImageDraw.Draw(sheet)
+          for i, entry in enumerate(accepted):
+              item_id = entry["id"]
+              x0 = gap + i * (size * 2 + gap * 3)
+              draw.text((x0 + 3, 6), item_id, fill=(35, 45, 50))
+              for panel, suffix in enumerate(("", "_shadow")):
+                  path = Path("assets/items", f"{item_id}{suffix}.webp")
+                  with Image.open(path) as source:
+                      object_rgba = source.convert("RGBA")
+                      object_rgba.thumbnail((size - 16, size - 16))
+                  base = Image.new("RGB", (size, size), (255, 255, 255))
+                  base.paste(object_rgba, ((size - object_rgba.width) // 2,
+                                           (size - object_rgba.height) // 2),
+                             object_rgba)
+                  sheet.paste(base, (x0 + panel * (size + gap), header))
+          sheet.save("assets/items/_preview.png", "PNG")
+          print("wrote color and silhouette preview sheet")
+          PY
+
+      # ------------------------------------------------------------
+      # Stage 4: open a Draft PR
+      # ------------------------------------------------------------
+
+      - name: Push the promotion branch
+        env:
+          APPROVED: ${{ inputs.approved_ids }}
+          RUN_ID: ${{ inputs.source_run_id }}
+          BG_MODE: ${{ inputs.background_mode }}
+        run: |
+          set -euo pipefail
+          branch="promote/minimax-${RUN_ID}-${GITHUB_RUN_ID}"
+          echo "BRANCH=${branch}" >> "$GITHUB_ENV"
+          git checkout -b "${branch}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Do not commit transient preview images; only the WebP pair +
+          # updated catalog should land in the PR.
+          git add assets/catalog/items.json
+          # Never commit the generated report.json or unreviewed previews.
+          IFS=',' read -ra approved_ids <<< "$APPROVED"
+          for approved_id in "${approved_ids[@]}"; do
+            git add "assets/items/${approved_id}.webp" "assets/items/${approved_id}_shadow.webp"
+          done
+          if git diff --cached --quiet; then
+              echo "no changes to commit; aborting Draft PR creation"
+              exit 0
+          fi
+          git commit -m "feat(items): promote MiniMax run ${RUN_ID} reviewed ids
+
+          Approved ids: ${APPROVED}
+          Background mode: ${BG_MODE}
+          Source run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}
+
+          This PR is intentionally Draft and must be reviewed before merge."
+          git push -u origin "${branch}"
+
+      - name: Open Draft Pull Request (no auto-merge)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ env.BRANCH }}
+          APPROVED: ${{ inputs.approved_ids }}
+          RUN_ID: ${{ inputs.source_run_id }}
+          BG_MODE: ${{ inputs.background_mode }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BRANCH:-}" ]; then
+              echo "no branch to promote; nothing to do"
+              exit 0
+          fi
+          owner="${GITHUB_REPOSITORY%/*}"
+          name="${GITHUB_REPOSITORY##*/}"
+          body="$(cat <<EOF
+          ## Promote MiniMax artifacts → Flutter item pool
+
+          - **Source run:** https://github.com/${owner}/${name}/actions/runs/${RUN_ID}
+          - **Approved ids:** \`${APPROVED}\`
+          - **Background mode:** \`${BG_MODE}\`
+
+          ### Checklist for a human reviewer
+          - [ ] Each approved object is the intended single, complete object.
+          - [ ] Transparent edges are clean (no white fringe, no missing limbs).
+          - [ ] The contact sheet previews are visually distinguishable.
+          - [ ] No trademarked character or scary imagery is present.
+          - [ ] Each \`effectPreset\` matches the object's tactile intuition.
+
+          Auto-merge is disabled by design. CI must remain green and a
+          reviewer must press *Squash and merge* once they sign off above.
+          EOF
+          )"
+          gh pr create \
+            --repo "${owner}/${name}" \
+            --head "${BRANCH}" \
+            --base main \
+            --draft \
+            --title "feat(items): MiniMax run ${RUN_ID} reviewed ids" \
+            --body "${body}"
+
+      - name: Confirm Draft PR is open and unfinalized
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY%/*}"
+          name="${GITHUB_REPOSITORY##*/}"
+          branch="${BRANCH:-}"
+          if [ -z "${branch}" ]; then
+              exit 0
+          fi
+          state="$(gh pr list --repo "${owner}/${name}" --head "${branch}" \
+            --json isDraft,state --jq '.[0] | "\(.state)|\(.isDraft)"')"
+          echo "PR state: ${state}"
+          if [[ "${state}" != "OPEN|true" ]]; then
+              echo "Expected an OPEN Draft PR; got '${state}'" >&2
+              exit 1
+          fi
+
+      - name: Upload preview contact sheet for the PR comment
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: promote-preview-${{ github.run_id }}
+          path: |
+            assets/items/_preview.png
+            ${{ runner.temp }}/promotion.json
+          if-no-files-found: warn
+          retention-days: 7

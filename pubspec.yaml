@@ -19,3 +19,4 @@ flutter:
   assets:
     - assets/catalog/
     - assets/animals/
+    - assets/items/
