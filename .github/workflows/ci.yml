@@ -40,6 +40,30 @@ jobs:
             -p 'test_promote_minimax_assets.py' -v
           python -m unittest discover -s scripts/tests \
             -p 'test_validate_catalog.py' -v
+          python -m unittest discover -s scripts/tests \
+            -p 'test_generate_v6_placeholders.py' -v
+      - name: Generate v6 placeholders into a scratch directory
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/dev_placeholders"
+          python scripts/generate_v6_placeholders.py \
+            --output-dir "$RUNNER_TEMP/dev_placeholders" \
+            --skip-index \
+            --strict
+          test -f "$RUNNER_TEMP/dev_placeholders/gel_star.webp"
+          test -f "$RUNNER_TEMP/dev_placeholders/gel_star_shadow.webp"
+      - name: Catalog strict-mode gate raises when items.json is empty
+        run: |
+          # Regression: --strict-min-items must refuse to ship an empty items.json.
+          if python scripts/validate_catalog.py \
+              --strict-min-items --min-items 4; then
+            echo "strict gate allowed empty items.json" >&2
+            exit 1
+          fi
+          # Confirm the gate fails because of the min-items rule:
+          python scripts/validate_catalog.py \
+            --strict-min-items --min-items 4 2>&1 \
+            | grep -q "approved items"
       - name: Minimax dry-run CLI (offline, no key or API usage)
         env:
           MINIMAX_SUBSCRIPTION_ONLY: '1'
