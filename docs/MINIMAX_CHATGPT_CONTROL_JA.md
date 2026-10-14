@@ -1,5 +1,10 @@
 # ChatGPTからMiniMaxの画像生成を操作する
 
+## 現在の稼働状態（2026-10-14）
+
+**チャット操作機能はmainに導入済みです。** [PR #34](https://github.com/SMRI2170/animal-shadow-match/pull/34) をマージ後、GitHubの本人名義コメントで [Issue #33](https://github.com/SMRI2170/animal-shadow-match/issues/33) にドライランを投稿し、[Run 38488571660](https://github.com/SMRI2170/animal-shadow-match/actions/runs/38488571660) の **Success** と report.json Artifactアップロードを確認しました。ドライランはMiniMax API未使用。**チャット経由の実課金生成はまだ未検証**で、ユーザーから実生成の依頼があった場合にのみ実施します。
+
+
 ## できること
 
 このリポジトリのChatGPT連携が、会話から **画像生成プロンプトを作成してGitHub Issue #33にコメント** します。コメントが認証・検証されるとGitHub ActionsがMiniMax `image-01`で1枚を生成してArtifactに保存します。
