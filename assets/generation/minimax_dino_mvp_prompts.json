@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "model": "image-01",
+  "style": "One adorable ORIGINAL baby dinosaur toy as a single complete character; one dinosaur only. Full body in a consistent three-quarter side view facing left, oversized friendly expressive eyes, gentle curious smile, chunky rounded toddler-safe silhouette, soft matte pastel 3D clay-figurine illustration, subtle handcrafted surface, bright harmonious candy colors, diffuse studio lighting. Centered 1:1 square composition, entire dinosaur including tail and head visible with generous margins, plain uniform pale cream backdrop easy to remove, NO cast or ground shadow. No eggs, nest, scenery, props, costumes, text, logo, watermark, collage, multiple characters, scary teeth, sharp claws, violence, photorealism or resemblance to licensed characters.",
+  "items": [
+    {
+      "id": "dino_trex",
+      "category": "dino_island",
+      "shape": "an unmistakable baby tyrannosaurus with an enormous rounded head, two very short arms, two thick legs and a long fat upward-curving tail; mouth closed, no exposed teeth",
+      "material": "warm coral-orange matte clay skin with a cream belly",
+      "effectPreset": "bounce"
+    },
+    {
+      "id": "dino_triceratops",
+      "category": "dino_island",
+      "shape": "a baby triceratops with an oversized broad rounded head frill, three thick blunt horns clearly separated in silhouette, four stout legs and a short tail; kind eyes",
+      "material": "mint green matte clay skin with peach cheek accents",
+      "effectPreset": "squish"
+    },
+    {
+      "id": "dino_stegosaurus",
+      "category": "dino_island",
+      "shape": "a low baby stegosaurus in profile with five huge separated rounded kite-shaped plates along its back, four short sturdy legs and a thick tail with no sharp spikes",
+      "material": "lavender matte clay skin with warm pale-yellow back plates",
+      "effectPreset": "wobble"
+    },
+    {
+      "id": "dino_brachiosaurus",
+      "category": "dino_island",
+      "shape": "a baby brachiosaurus with a very tall gracefully rising thick neck, a small round head at its top, barrel body and four sturdy legs; short chunky tail",
+      "material": "butter-yellow matte clay skin with muted aqua accent dots",
+      "effectPreset": "bounce"
+    },
+    {
+      "id": "dino_ankylosaurus",
+      "category": "dino_island",
+      "shape": "a baby ankylosaurus with very wide low oval armored body, four short feet, four large rounded shield-like bumps on the back and an unmistakable oversized round club at the end of a thick sideways tail",
+      "material": "soft sage-green matte clay skin with pale orange rounded armor plates",
+      "effectPreset": "inflate"
+    },
+    {
+      "id": "dino_parasaurolophus",
+      "category": "dino_island",
+      "shape": "a baby parasaurolophus standing on two strong hind legs with a single long thick backward-curving crest emerging from the top of its small head, a rounded belly and long thick tail",
+      "material": "soft turquoise matte clay skin with lilac crest",
+      "effectPreset": "wobble"
+    },
+    {
+      "id": "dino_spinosaurus",
+      "category": "dino_island",
+      "shape": "a baby spinosaurus with an enormous single broad fan-shaped sail rising from the entire middle of its back, a long rounded snout with mouth shut, low strong legs and a chunky tail",
+      "material": "sky-blue matte clay skin with sunset-pink broad back sail",
+      "effectPreset": "squish"
+    },
+    {
+      "id": "dino_pachy",
+      "category": "dino_island",
+      "shape": "a baby pachycephalosaurus with an exaggerated huge smooth spherical dome head, a tiny blunt muzzle, tiny rounded ornamental nubs only around the neck, compact pear-shaped body and short sturdy legs",
+      "material": "strawberry-pink matte clay skin with cream dome highlights",
+      "effectPreset": "inflate"
+    }
+  ]
+}

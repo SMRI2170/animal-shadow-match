@@ -28,6 +28,40 @@ class MiniMaxBatchTests(unittest.TestCase):
         for item in items:
             self.assertLessEqual(len(mm.make_prompt(self.catalog, item)), 1500)
 
+    def test_dino_catalog_has_eight_distinct_playable_prompts(self):
+        dino_path = mm.ROOT / "assets/generation/minimax_dino_mvp_prompts.json"
+        catalog = mm.read_catalog(dino_path)
+        self.assertEqual(len(catalog["items"]), 8)
+        self.assertEqual(
+            [item["id"] for item in catalog["items"]],
+            ["dino_trex", "dino_triceratops", "dino_stegosaurus",
+             "dino_brachiosaurus", "dino_ankylosaurus",
+             "dino_parasaurolophus", "dino_spinosaurus", "dino_pachy"],
+        )
+        self.assertEqual({item["category"] for item in catalog["items"]},
+                         {"dino_island"})
+        self.assertEqual({item["effectPreset"] for item in catalog["items"]},
+                         {"squish", "wobble", "bounce", "inflate"})
+        for item in catalog["items"]:
+            prompt = mm.make_prompt(catalog, item)
+            self.assertLessEqual(len(prompt), 1500)
+            self.assertIn("original baby dinosaur", prompt.lower())
+            self.assertIn(item["shape"], prompt)
+        with self.assertRaises(ValueError):
+            mm.select_items(catalog, 7, 2)
+
+    def test_dino_dry_run_writes_only_plan_never_calls_api(self):
+        dino_path = mm.ROOT / "assets/generation/minimax_dino_mvp_prompts.json"
+        with tempfile.TemporaryDirectory() as temp:
+            with patch.object(mm, "fetch_image",
+                              side_effect=AssertionError("API CALLED")):
+                plan = mm.run(start=0, count=4, output=Path(temp),
+                              dry_run=True, region="intl", catalog_file=dino_path)
+            self.assertEqual(len(plan), 4)
+            self.assertEqual(plan[0]["id"], "dino_trex")
+            self.assertTrue(all(row["status"] == "planned" for row in plan))
+            self.assertEqual(list(Path(temp).glob("*.png")), [])
+
     def test_batch_budget_and_range_checks(self):
         for invalid in (0, 7, 100, -1):
             with self.assertRaises(ValueError):

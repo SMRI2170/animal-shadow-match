@@ -41,6 +41,15 @@ On a Mac, add iOS scaffolding later with `flutter create --platforms=ios .`. Do 
 
 - [**Single-asset interactive object game v6 (日本語)**](docs/SINGLE_ASSET_OBJECT_GAME_JA.md) — art direction, no-rig FX API, item model, 30-asset trial and implementation gates
 
+## Unified art experiment: baby dinosaur island (v7, not yet generated)
+
+The original 30 soft-object candidates (#35-#65) remain available for comparison. [Art MVP #75](https://github.com/SMRI2170/animal-shadow-match/issues/75) groups eight original baby-dinosaur assets into one child-friendly world, with full MiniMax prompts in subtask Issues #76-#83. Each silhouette is distinguished by an oversized head, frill/horns, back plates, long neck, tail club, crest, sail, or dome.
+
+- [Prompt catalog](assets/generation/minimax_dino_mvp_prompts.json)
+- [Japanese generation and app-integration guide](docs/DINO_MVP_RUNBOOK_JA.md)
+- **To run a safe preview:** open MiniMax Actions, select `theme=dino_island_mvp_8`, `start_index=0`, `count=1`, `dry_run=true`. Do not make paid requests before reviewing prompts/usage.
+- **Game logic already exists in [MVP Draft PR #67](https://github.com/SMRI2170/animal-shadow-match/pull/67)**. An [Android Debug APK artifact](https://github.com/SMRI2170/animal-shadow-match/actions/runs/38493647355/artifacts/11863076088) is available to playtest **with placeholder animals**, not the new dinosaurs.
+
 ## MiniMax image generation through GitHub Actions (manual, paid opt-in only)
 
 - [Run: MiniMax object candidates](https://github.com/SMRI2170/animal-shadow-match/actions/workflows/minimax-images.yml)
