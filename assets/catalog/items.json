@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "assets_note": "Initially empty until MiniMax-generated objects clear the human review gate (Issue #31). The Flutter app falls back to assets/catalog/animals.json when this file is absent or empty, so the 8 demo silhouettes keep the game playable.",
+  "items": []
+}

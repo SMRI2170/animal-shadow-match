@@ -1,58 +1,72 @@
 import 'dart:math';
 
-import 'animal.dart';
+import 'shadow_item.dart';
 
 class ShadowRound {
   const ShadowRound({required this.target, required this.options});
 
-  final Animal target;
-  final List<Animal> options;
+  final ShadowItem target;
+  final List<ShadowItem> options;
 
-  bool isCorrect(String animalId) => target.id == animalId;
+  bool isCorrect(String itemId) => target.id == itemId;
 }
 
 /// Generates rounds locally. The listed distractors are hand-curated, with a
 /// catalog-wide fallback; the final options are shuffled on every round.
+///
+/// Works on the generic [ShadowItem] so animal/object/character catalogs all
+/// use the same round logic. The legacy `Animal` type is now a subclass of
+/// [ShadowItem], so this keeps working without changes for the demo data.
 class RoundFactory {
   RoundFactory({Random? random}) : _random = random ?? Random();
 
   final Random _random;
 
   ShadowRound create({
-    required List<Animal> catalog,
+    required List<ShadowItem> catalog,
     required int optionCount,
     String? previousTargetId,
+    Set<String> excludedTargetIds = const {},
   }) {
     if (optionCount < 2 || catalog.length < optionCount) {
-      throw ArgumentError('Not enough animals for $optionCount options');
+      throw ArgumentError(
+        'RoundFactory needs at least $optionCount distinct items in the catalog',
+      );
     }
-    final eligible = catalog
-        .where((animal) => animal.id != previousTargetId)
+    // Prefer an unseen target within this five-question set. When the
+    // catalog is too small, gracefully fall back to a previously seen item.
+    final unseen = catalog
+        .where((item) =>
+            item.id != previousTargetId &&
+            !excludedTargetIds.contains(item.id))
         .toList();
-    final targetPool = eligible.isNotEmpty ? eligible : catalog;
+    final eligible =
+        catalog.where((item) => item.id != previousTargetId).toList();
+    final targetPool =
+        unseen.isNotEmpty ? unseen : (eligible.isNotEmpty ? eligible : catalog);
     final target = targetPool[_random.nextInt(targetPool.length)];
-    final byId = {for (final animal in catalog) animal.id: animal};
+    final byId = {for (final item in catalog) item.id: item};
 
-    final preferred = <Animal>[];
+    final preferred = <ShadowItem>[];
     for (final id in target.distractorIds) {
-      final animal = byId[id];
-      if (animal != null && animal.id != target.id) preferred.add(animal);
+      final item = byId[id];
+      if (item != null && item.id != target.id) preferred.add(item);
     }
     preferred.shuffle(_random);
     final fallback = catalog
-        .where((animal) =>
-            animal.id != target.id &&
-            !preferred.any((preferredAnimal) => preferredAnimal.id == animal.id))
+        .where((item) =>
+            item.id != target.id &&
+            !preferred.any((preferredAnimal) => preferredAnimal.id == item.id))
         .toList()
       ..shuffle(_random);
 
-    final distractors = <Animal>[];
+    final distractors = <ShadowItem>[];
     for (final candidate in [...preferred, ...fallback]) {
-      if (distractors.any((animal) => animal.id == candidate.id)) continue;
+      if (distractors.any((item) => item.id == candidate.id)) continue;
       distractors.add(candidate);
       if (distractors.length == optionCount - 1) break;
     }
-    final options = <Animal>[target, ...distractors]..shuffle(_random);
+    final options = <ShadowItem>[target, ...distractors]..shuffle(_random);
     return ShadowRound(target: target, options: options);
   }
 }

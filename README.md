@@ -106,3 +106,7 @@ Child-directed release requires accurate target-age, data safety, privacy-policy
 - No music/sound, persistent unlocks, localization of store listing, or actual store publication yet.
 - UI and Dart tests are **not yet executed against Flutter** in this preparation environment (Flutter SDK unavailable). Image/catalog validator has been executed successfully.
 - Native `android/` and `ios/` project files are intentionally not included yet.
+
+## Five-question squishy MVP playtest
+
+A child-friendly offline loop (match silhouettes → 5-image touch playground → continue/rest) is implemented on the MVP branch. Until MiniMax candidates have passed review, it uses the existing animal demo artwork. [日本語のAPK導入・試遊手順](docs/MVP_PLAYTEST_JA.md)。
