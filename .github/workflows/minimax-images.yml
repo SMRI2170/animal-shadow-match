@@ -5,8 +5,16 @@ name: MiniMax - Generate object candidates
 on:
   workflow_dispatch:
     inputs:
+      theme:
+        description: 'Which candidate art theme to generate'
+        required: true
+        default: squishy_objects_30
+        type: choice
+        options:
+          - squishy_objects_30
+          - dino_island_mvp_8
       start_index:
-        description: '0-based candidate number (0..29) in the 30-object catalog'
+        description: '0-based candidate index within selected catalog (0..29 or 0..7)'
         required: true
         default: 0
         type: number
@@ -55,8 +63,15 @@ jobs:
           MM_START: ${{ inputs.start_index }}
           MM_COUNT: ${{ inputs.count }}
           MM_REGION: ${{ inputs.region }}
+          MM_THEME: ${{ inputs.theme }}
         run: |
+          case "$MM_THEME" in
+            squishy_objects_30) catalog="assets/generation/minimax_object_prompts.json" ;;
+            dino_island_mvp_8) catalog="assets/generation/minimax_dino_mvp_prompts.json" ;;
+            *) echo "Invalid theme"; exit 1 ;;
+          esac
           python scripts/minimax_batch.py \
+            --catalog-file "$catalog" \
             --start "$MM_START" --count "$MM_COUNT" --region "$MM_REGION" \
             --output generated/minimax --dry-run
 
@@ -68,8 +83,15 @@ jobs:
           MM_START: ${{ inputs.start_index }}
           MM_COUNT: ${{ inputs.count }}
           MM_REGION: ${{ inputs.region }}
+          MM_THEME: ${{ inputs.theme }}
         run: |
+          case "$MM_THEME" in
+            squishy_objects_30) catalog="assets/generation/minimax_object_prompts.json" ;;
+            dino_island_mvp_8) catalog="assets/generation/minimax_dino_mvp_prompts.json" ;;
+            *) echo "Invalid theme"; exit 1 ;;
+          esac
           python scripts/minimax_batch.py \
+            --catalog-file "$catalog" \
             --start "$MM_START" --count "$MM_COUNT" --region "$MM_REGION" \
             --output generated/minimax
 
