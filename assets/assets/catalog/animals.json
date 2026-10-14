@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "assets_note": "Demo artwork only; replace with reviewed MiniMax-generated animal assets before launch.",
+  "animals": [
+    {"id":"giraffe","name":"Giraffe","image":"assets/animals/giraffe.webp","shadow":"assets/animals/giraffe_shadow.webp","category":"savanna","distractors":["elephant","duck","rabbit"]},
+    {"id":"elephant","name":"Elephant","image":"assets/animals/elephant.webp","shadow":"assets/animals/elephant_shadow.webp","category":"savanna","distractors":["giraffe","whale","cat"]},
+    {"id":"rabbit","name":"Rabbit","image":"assets/animals/rabbit.webp","shadow":"assets/animals/rabbit_shadow.webp","category":"farm","distractors":["duck","cat","giraffe"]},
+    {"id":"cat","name":"Cat","image":"assets/animals/cat.webp","shadow":"assets/animals/cat_shadow.webp","category":"farm","distractors":["rabbit","whale","elephant"]},
+    {"id":"whale","name":"Whale","image":"assets/animals/whale.webp","shadow":"assets/animals/whale_shadow.webp","category":"ocean","distractors":["elephant","duck","butterfly"]},
+    {"id":"duck","name":"Duck","image":"assets/animals/duck.webp","shadow":"assets/animals/duck_shadow.webp","category":"farm","distractors":["rabbit","cat","giraffe"]},
+    {"id":"butterfly","name":"Butterfly","image":"assets/animals/butterfly.webp","shadow":"assets/animals/butterfly_shadow.webp","category":"garden","distractors":["duck","whale","octopus"]},
+    {"id":"octopus","name":"Octopus","image":"assets/animals/octopus.webp","shadow":"assets/animals/octopus_shadow.webp","category":"ocean","distractors":["butterfly","elephant","whale"]}
+  ]
+}
