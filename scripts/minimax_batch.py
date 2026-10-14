@@ -238,10 +238,13 @@ def main() -> None:
     parser.add_argument("--count", type=int, default=1)
     parser.add_argument("--region", choices=sorted(REGION_ENDPOINTS), default="intl")
     parser.add_argument("--output", type=Path, default=Path("generated/minimax"))
+    parser.add_argument("--catalog-file", type=Path, default=CATALOG,
+                        help="Path to approved prompt catalog JSON")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     run(start=args.start, count=args.count, output=args.output,
-        dry_run=args.dry_run, region=args.region)
+        dry_run=args.dry_run, region=args.region,
+        catalog_file=args.catalog_file)
 
 
 if __name__ == "__main__":
