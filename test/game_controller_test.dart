@@ -48,15 +48,16 @@ void main() {
       catalog: catalog,
       factory: RoundFactory(random: Random(2)),
     );
-    GameState state = controller.start();
-    final target = (state as SolvingState).round.target;
-    state = controller.onChoice(target.id);
+    SolvingState start = controller.start() as SolvingState;
+    final target = start.round.target;
+    GameState state = controller.onChoice(target.id);
     expect(state, isA<SolvedState>());
     expect((state as SolvedState).round.target.id, target.id);
     state = controller.onEffectFinished();
     expect(state, isA<SolvingState>());
-    expect((state as SolvingState).completedInSet, 1);
-    expect((state as SolvingState).round.target.id, isNot(target.id),
+    final solving = state as SolvingState;
+    expect(solving.completedInSet, 1);
+    expect(solving.round.target.id, isNot(target.id),
         reason: 'next round should pick a different target');
   });
 
@@ -118,19 +119,17 @@ void main() {
       factory: RoundFactory(random: Random(6)),
     );
     expect((controller.start() as SolvingState).optionCount, 2);
-    // Simulate 5 completes + their effects.
-    GameState state = controller.start();
+    SolvingState state = controller.start() as SolvingState;
     for (var i = 0; i < 5; i++) {
-      final solving = state as SolvingState;
-      state = controller.onChoice(solving.round.target.id);
-      if (state is SetCompletedState) {
-        state = controller.onContinue();
+      GameState next = controller.onChoice(state.round.target.id);
+      if (next is SetCompletedState) {
+        state = controller.onContinue() as SolvingState;
         continue;
       }
-      state = controller.onEffectFinished();
+      state = controller.onEffectFinished() as SolvingState;
     }
     expect(controller.totalCompleted, 5);
-    expect((state as SolvingState).optionCount, 3);
+    expect(state.optionCount, 3);
   });
 
   test('repeated recent targets are avoided', () {
@@ -138,18 +137,18 @@ void main() {
       catalog: catalog,
       factory: RoundFactory(random: Random(7)),
     );
-    GameState state = controller.start();
+    SolvingState state = controller.start() as SolvingState;
     final picks = <String>{};
-    for (var i = 0; i < 5 && state is SolvingState; i++) {
-      picks.add((state as SolvingState).round.target.id);
-      state = controller.onChoice((state).round.target.id);
-      if (state is SetCompletedState) break;
-      if (state is SolvedState) {
-        state = controller.onEffectFinished();
+    for (var i = 0; i < 5; i++) {
+      picks.add(state.round.target.id);
+      GameState next = controller.onChoice(state.round.target.id);
+      if (next is SetCompletedState) break;
+      if (next is SolvedState) {
+        state = controller.onEffectFinished() as SolvingState;
+      } else {
+        state = next as SolvingState;
       }
     }
-    // At most one repeat across 5 picks (set length is 6 so repeats are
-    // possible only if we wrap twice). We expect generally diverse targets.
     expect(picks.length, greaterThan(2));
   });
 }
