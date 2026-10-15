@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  shared_preferences: ^2.3.5
 
 dev_dependencies:
   flutter_test:
@@ -19,3 +20,5 @@ flutter:
   assets:
     - assets/catalog/
     - assets/animals/
+    - assets/items/
+    - assets/development/

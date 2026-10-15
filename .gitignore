@@ -10,6 +10,7 @@ coverage/
 .idea/
 .vscode/
 .DS_Store
+.metadata
 android/.gradle/
 android/local.properties
 android/key.properties
@@ -18,3 +19,4 @@ android/key.properties
 **/Flutter/ephemeral/
 assets/source/*
 !assets/source/.gitkeep
+assets/development/ai_demo_raw/
