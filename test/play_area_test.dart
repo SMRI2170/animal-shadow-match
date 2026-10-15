@@ -32,8 +32,9 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 1));
     expect(find.byType(ReviewPlayArea), findsOneWidget);
-    expect(find.text('Continue'), findsOneWidget);
-    await tester.tap(find.text('Continue'));
+    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+    expect(find.byTooltip('Continue'), findsOneWidget);
+    await tester.tap(find.byTooltip('Continue'));
     await tester.pump();
     expect(continueCalls, 1);
   });
@@ -65,10 +66,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
-    expect(find.text('Rest'), findsOneWidget);
-    expect(find.text('Continue'), findsOneWidget);
+    expect(find.byTooltip('Rest'), findsOneWidget);
+    expect(find.byTooltip('Continue'), findsOneWidget);
+    expect(find.byIcon(Icons.bedtime_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
 
-    await tester.tap(find.text('Rest'));
+    await tester.tap(find.byTooltip('Rest'));
     await tester.pump();
     expect(restCalls, 1);
     expect(continueCalls, 0);

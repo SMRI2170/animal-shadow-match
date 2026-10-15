@@ -33,20 +33,16 @@ class ReviewPlayArea extends StatelessWidget {
         elevation: 0,
         actions: [
           if (onRest != null)
-            TextButton(
+            IconButton(
+              icon: const Icon(Icons.bedtime_rounded, size: 28),
+              tooltip: 'Rest',
               onPressed: onRest,
-              child: const Text(
-                'Rest',
-                style: TextStyle(fontSize: 18),
-              ),
             ),
           if (onContinue != null)
-            TextButton(
+            IconButton(
+              icon: const Icon(Icons.play_arrow_rounded, size: 28),
+              tooltip: 'Continue',
               onPressed: onContinue,
-              child: const Text(
-                'Continue',
-                style: TextStyle(fontSize: 18),
-              ),
             ),
         ],
       ),

@@ -26,12 +26,10 @@ class RestingScreen extends StatelessWidget {
         elevation: 0,
         actions: [
           if (onResume != null)
-            TextButton(
+            IconButton(
+              icon: const Icon(Icons.replay_rounded, size: 28),
+              tooltip: 'Resume',
               onPressed: onResume,
-              child: const Text(
-                'Resume',
-                style: TextStyle(fontSize: 18),
-              ),
             ),
         ],
       ),

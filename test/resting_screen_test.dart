@@ -39,11 +39,26 @@ void main() {
     // observe the static state.
     await tester.pump();
     expect(find.byType(RestingScreen), findsOneWidget);
-    expect(find.text('Resume'), findsOneWidget);
+    expect(find.byTooltip('Resume'), findsOneWidget);
+    expect(find.byIcon(Icons.replay_rounded), findsOneWidget);
     expect(find.byType(Image), findsNWidgets(items.length));
   });
 
-  testWidgets('Tapping anywhere on the resting area calls onResume',
+  testWidgets('Tapping the Resume icon button calls onResume',
+      (tester) async {
+    var resumeCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RestingScreen(items: items, onResume: () => resumeCalls += 1),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('Resume'));
+    await tester.pump();
+    expect(resumeCalls, 1);
+  });
+
+  testWidgets('Tapping anywhere on the resting area also calls onResume',
       (tester) async {
     var resumeCalls = 0;
     await tester.pumpWidget(
