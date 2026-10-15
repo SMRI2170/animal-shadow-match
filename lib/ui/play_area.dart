@@ -18,11 +18,25 @@ class ReviewPlayArea extends StatelessWidget {
     required this.items,
     this.onContinue,
     this.onRest,
+    this.imageBundle,
+    this.imageProvider,
   });
 
   final List<ShadowItem> items;
   final VoidCallback? onContinue;
   final VoidCallback? onRest;
+
+  /// Optional [AssetBundle] that resolves every Image.asset on the
+  /// review tiles. Widget tests inject an in-memory bundle to avoid
+  /// `rootBundle.load('AssetManifest.bin')` failures (Issue #21
+  /// follow-up: full GamePage widget test).
+  final AssetBundle? imageBundle;
+
+  /// Optional pre-built [ImageProvider] used as the source for every
+  /// review tile. When non-null, takes precedence over [imageBundle].
+  /// Widget tests inject a [MemoryImage] here to bypass the asset
+  /// manifest entirely.
+  final ImageProvider? imageProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +73,11 @@ class ReviewPlayArea extends StatelessWidget {
                   runSpacing: 16,
                   children: [
                     for (final item in items)
-                      _ReviewTile(item: item),
+                      _ReviewTile(
+                        item: item,
+                        imageBundle: imageBundle,
+                        imageProvider: imageProvider,
+                      ),
                   ],
                 ),
         ),
@@ -69,9 +87,15 @@ class ReviewPlayArea extends StatelessWidget {
 }
 
 class _ReviewTile extends StatefulWidget {
-  const _ReviewTile({required this.item});
+  const _ReviewTile({
+    required this.item,
+    this.imageBundle,
+    this.imageProvider,
+  });
 
   final ShadowItem item;
+  final AssetBundle? imageBundle;
+  final ImageProvider? imageProvider;
 
   @override
   State<_ReviewTile> createState() => _ReviewTileState();
@@ -101,6 +125,8 @@ class _ReviewTileState extends State<_ReviewTile> {
           key: _effectKey,
           item: widget.item,
           assetPath: widget.item.imagePath,
+          imageBundle: widget.imageBundle,
+          imageProvider: widget.imageProvider,
         ),
       ),
     );

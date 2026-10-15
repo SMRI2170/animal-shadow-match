@@ -1,10 +1,14 @@
 // ignore_for_file: prefer_const_constructors
 
+import 'dart:typed_data';
+
 import 'package:animal_shadow_match/domain/effect_preset.dart';
 import 'package:animal_shadow_match/domain/shadow_item.dart';
 import 'package:animal_shadow_match/ui/resting_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'helpers/test_assets.dart';
 
 ShadowItem _item(String id) {
   return ShadowItem(
@@ -99,4 +103,27 @@ void main() {
     await tester.pump();
     expect(find.byIcon(Icons.inbox_rounded), findsOneWidget);
   });
+
+  testWidgets('RestingScreen paints via the injected ImageProvider '
+      '(no rootBundle)', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RestingScreen(
+          items: items,
+          onResume: () {},
+          imageProvider: _memoryImage(),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull,
+        reason: 'MemoryImage path must bypass AssetManifest.bin');
+    expect(find.byType(RestingScreen), findsOneWidget);
+    expect(find.byType(Image), findsNWidgets(items.length));
+  });
 }
+
+/// 1x1 transparent PNG as a MemoryImage so RestingScreen widgets paint
+/// without any on-disk asset. Mirrors `helpers/test_assets.dart::_pngBytes`.
+MemoryImage _memoryImage() =>
+    MemoryImage(Uint8List.fromList(transparentPixelPng()));

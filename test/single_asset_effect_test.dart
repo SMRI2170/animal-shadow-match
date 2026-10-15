@@ -2,7 +2,10 @@ import 'package:animal_shadow_match/domain/effect_preset.dart';
 import 'package:animal_shadow_match/domain/shadow_item.dart';
 import 'package:animal_shadow_match/ui/single_asset_effect.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'helpers/test_assets.dart';
 
 ShadowItem _item(EffectPreset preset) => ShadowItem(
       id: 'gel_star',
@@ -61,4 +64,34 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 2));
     expect(calls, 1);
   });
+
+  testWidgets('SingleAssetEffect accepts a custom ImageProvider and skips '
+      'asset loading', (tester) async {
+    final calls = <int>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SingleAssetEffect(
+              item: _item(EffectPreset.inflate),
+              assetPath: 'assets/not/in/manifest.bin',
+              imageProvider: _testImageProvider(),
+              onCompleted: () => calls.add(1),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 2));
+    expect(tester.takeException(), isNull,
+        reason: 'injected ImageProvider must avoid AssetManifest.bin entirely');
+    expect(find.byType(SingleAssetEffect), findsOneWidget);
+    expect(calls, [1]);
+  });
 }
+
+/// Minimal 1x1 transparent PNG as a MemoryImage. Lets the test prove the
+/// imageProvider parameter is wired through SingleAssetEffect and reaches
+/// `Image(image: ...)` without falling back to `Image.asset`.
+ImageProvider _testImageProvider() =>
+    MemoryImage(Uint8List.fromList(transparentPixelPng()));

@@ -1,8 +1,13 @@
+import 'dart:typed_data';
+
 import 'package:animal_shadow_match/domain/effect_preset.dart';
 import 'package:animal_shadow_match/domain/shadow_item.dart';
 import 'package:animal_shadow_match/ui/play_area.dart';
+import 'package:animal_shadow_match/ui/single_asset_effect.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'helpers/test_assets.dart';
 
 ShadowItem _item(String id) {
   return ShadowItem(
@@ -104,4 +109,40 @@ void main() {
     expect(find.byIcon(Icons.bedtime_rounded), findsNothing,
         reason: 'onRest was not provided, so the Rest icon is absent');
   });
+
+  testWidgets('ReviewPlayArea propagates imageProvider to its review tiles',
+      (tester) async {
+    final items = [
+      _item('gel_star'),
+      _item('cloud_cushion'),
+      _item('teardrop_gummy'),
+    ];
+    var continueCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ReviewPlayArea(
+          items: items,
+          onContinue: () => continueCalls++,
+          imageProvider: _memoryImage(),
+        ),
+      ),
+    );
+    // The SingleAssetEffect inside each _ReviewTile replays every tap, so
+    // pumpAndSettle the FX to its completed state before probing.
+    await tester.pumpAndSettle(const Duration(seconds: 2));
+    expect(tester.takeException(), isNull,
+        reason: 'imageProvider must bypass AssetManifest.bin entirely');
+    expect(find.byType(ReviewPlayArea), findsOneWidget);
+    expect(find.byType(SingleAssetEffect), findsNWidgets(items.length));
+    // Tapping Continue still works even with an injected provider.
+    await tester.tap(find.byTooltip('Continue'));
+    await tester.pump();
+    expect(continueCalls, 1);
+  });
 }
+
+/// Minimal 1x1 transparent PNG as a MemoryImage. Lets widget tests verify
+/// that imageProvider/imageBundle plumbing reaches SingleAssetEffect /
+/// RestingScreen without any on-disk asset.
+MemoryImage _memoryImage() =>
+    MemoryImage(Uint8List.fromList(transparentPixelPng()));

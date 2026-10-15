@@ -13,6 +13,7 @@ class RestingScreen extends StatelessWidget {
     required this.items,
     this.onResume,
     this.imageBundle,
+    this.imageProvider,
   });
 
   final List<ShadowItem> items;
@@ -23,6 +24,11 @@ class RestingScreen extends StatelessWidget {
   /// avoid `rootBundle.load('AssetManifest.bin')` failures (Issue #21
   /// follow-up: full GamePage widget test).
   final AssetBundle? imageBundle;
+
+  /// Optional pre-built [ImageProvider] for the tiles. When non-null,
+  /// takes precedence over [imageBundle]; widget tests pass a
+  /// [MemoryImage] here to bypass the asset bundle entirely.
+  final ImageProvider? imageProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +61,11 @@ class RestingScreen extends StatelessWidget {
                     spacing: 16,
                     runSpacing: 16,
                     children: [
-                      for (final item in items) _RestingTile(item: item, bundle: imageBundle),
+                      for (final item in items) _RestingTile(
+                        item: item,
+                        bundle: imageBundle,
+                        imageProvider: imageProvider,
+                      ),
                     ],
                   ),
           ),
@@ -66,10 +76,11 @@ class RestingScreen extends StatelessWidget {
 }
 
 class _RestingTile extends StatefulWidget {
-  const _RestingTile({required this.item, this.bundle});
+  const _RestingTile({required this.item, this.bundle, this.imageProvider});
 
   final ShadowItem item;
   final AssetBundle? bundle;
+  final ImageProvider? imageProvider;
 
   @override
   State<_RestingTile> createState() => _RestingTileState();
@@ -106,11 +117,16 @@ class _RestingTileState extends State<_RestingTile>
             padding: const EdgeInsets.all(8),
             child: Opacity(
               opacity: 0.75,
-              child: Image.asset(
-                widget.item.imagePath,
-                fit: BoxFit.contain,
-                bundle: widget.bundle,
-              ),
+              child: widget.imageProvider != null
+                  ? Image(
+                      image: widget.imageProvider!,
+                      fit: BoxFit.contain,
+                    )
+                  : Image.asset(
+                      widget.item.imagePath,
+                      fit: BoxFit.contain,
+                      bundle: widget.bundle,
+                    ),
             ),
           ),
         );

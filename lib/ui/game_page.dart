@@ -331,6 +331,7 @@ class _PlayBoardState extends State<_PlayBoard> {
                       item: state.round.target,
                       assetPath: state.round.target.imagePath,
                       onCompleted: _onEffectCompleted,
+                      imageBundle: widget.imageBundle,
                     ),
                   ),
                 ),
@@ -371,6 +372,7 @@ class _PlayBoardState extends State<_PlayBoard> {
       items: state.recentItems,
       onContinue: _onContinueFromSet,
       onRest: _onRestFromSet,
+      imageBundle: widget.imageBundle,
     );
   }
 
@@ -378,6 +380,7 @@ class _PlayBoardState extends State<_PlayBoard> {
     return RestingScreen(
       items: state.recentItems,
       onResume: _onResumeFromRest,
+      imageBundle: widget.imageBundle,
     );
   }
 }

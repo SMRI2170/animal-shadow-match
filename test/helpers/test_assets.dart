@@ -7,6 +7,11 @@ import 'package:flutter/services.dart';
 /// In-memory [AssetBundle] that resolves every well-known asset key from a
 /// flat map. Lets widget tests mount widgets with `Image.asset(...)` paths
 /// without bundling the real WebP files.
+///
+/// Widget tests that exercise an [ImageProvider] bypass this bundle
+/// entirely; tests that exercise [Image.asset] use this bundle but should
+/// declare assets on `assets/development/` so the test environment has the
+/// manifest wired up. See single_asset_effect_test.dart for details.
 class InMemoryAssetBundle extends CachingAssetBundle {
   InMemoryAssetBundle(this._entries);
 

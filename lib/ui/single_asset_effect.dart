@@ -19,6 +19,8 @@ class SingleAssetEffect extends StatefulWidget {
     required this.assetPath,
     this.size,
     this.onCompleted,
+    this.imageBundle,
+    this.imageProvider,
   });
 
   final ShadowItem item;
@@ -33,6 +35,16 @@ class SingleAssetEffect extends StatefulWidget {
   /// Optional hook invoked once the effect finishes; the parent widget can
   /// use this to advance to the next round.
   final VoidCallback? onCompleted;
+
+  /// Optional [AssetBundle] that resolves [assetPath]. Widget tests
+  /// inject an in-memory bundle to avoid `rootBundle.load('AssetManifest.bin')`
+  /// failures (Issue #21 follow-up).
+  final AssetBundle? imageBundle;
+
+  /// Optional pre-built [ImageProvider]. When non-null, takes
+  /// precedence over [assetPath]/[imageBundle]; widget tests pass a
+  /// [MemoryImage] here to bypass the asset bundle entirely.
+  final ImageProvider? imageProvider;
 
   @override
   State<SingleAssetEffect> createState() => _SingleAssetEffectState();
@@ -72,7 +84,16 @@ class _SingleAssetEffectState extends State<SingleAssetEffect>
 
   @override
   Widget build(BuildContext context) {
-    final image = Image.asset(widget.assetPath, fit: BoxFit.contain);
+    // Prefer an injected ImageProvider (widget tests pass MemoryImage to
+    // bypass AssetManifest.bin entirely); otherwise fall back to Image.asset
+    // with the optional [imageBundle] override.
+    final image = widget.imageProvider != null
+        ? Image(image: widget.imageProvider!, fit: BoxFit.contain)
+        : Image.asset(
+            widget.assetPath,
+            fit: BoxFit.contain,
+            bundle: widget.imageBundle,
+          );
     final wrapped = widget.size == null
         ? image
         : SizedBox.fromSize(size: widget.size!, child: image);
