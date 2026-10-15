@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../domain/effect_preset.dart';
 import '../domain/shadow_item.dart';
-import 'single_asset_effect.dart';
 
 /// P1 prototype of the Clip-split effect (#30).
 ///
