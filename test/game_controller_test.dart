@@ -205,4 +205,169 @@ void main() {
     }
     expect(picks.length, greaterThan(2));
   });
+
+  // -------- Issue #20 acceptance tests --------
+
+  group('Issue #20 acceptance: 5 unique targets per set', () {
+    test('a full 5-correct set ends with 5 unique recentItems', () {
+      final controller = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(20)),
+      );
+      GameState? state = controller.start();
+      for (var i = 0; i < 5; i++) {
+        final solving = state! as SolvingState;
+        controller.onChoice(solving.round.target.id);
+        state = controller.onEffectFinished();
+      }
+      expect(state, isA<SetCompletedState>());
+      final completed = state as SetCompletedState;
+      expect(completed.recentItems, hasLength(5));
+      expect(
+        completed.recentItems.map((e) => e.id).toSet(),
+        hasLength(5),
+        reason: 'every correct answer in a set must hit a unique target',
+      );
+    });
+
+    test('1000 random sets each produce 5 unique targets', () {
+      for (var seed = 1; seed <= 1000; seed++) {
+        final controller = GameController(
+          catalog: catalog,
+          factory: RoundFactory(random: Random(seed)),
+        );
+        GameState? state = controller.start();
+        final ids = <String>{};
+        for (var i = 0; i < 5; i++) {
+          final solving = state! as SolvingState;
+          ids.add(solving.round.target.id);
+          controller.onChoice(solving.round.target.id);
+          state = controller.onEffectFinished();
+        }
+        expect(
+          ids,
+          hasLength(5),
+          reason: 'seed $seed produced a duplicate target in one set',
+        );
+        expect(state, isA<SetCompletedState>(),
+            reason: 'seed $seed did not close the set');
+      }
+    });
+
+    test('6th question is never auto-generated after a 5-correct set', () {
+      // After SetCompletedState the controller must NOT silently roll a
+      // 6th round; only onContinue (or onRest) may advance.
+      final controller = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(21)),
+      );
+      GameState? state = controller.start();
+      for (var i = 0; i < 5; i++) {
+        final solving = state! as SolvingState;
+        controller.onChoice(solving.round.target.id);
+        state = controller.onEffectFinished();
+      }
+      expect(state, isA<SetCompletedState>());
+      // Calling onChoice on a SetCompletedState must NOT advance. The
+      // controller surfaces a hard StateError so the GamePage (which
+      // already guards on `current is! SolvingState`) can never silently
+      // trigger a 6th round.
+      expect(() => controller.onChoice('gel_star'), throwsStateError,
+          reason: 'onChoice after set completion must not advance');
+    });
+
+    test('wrong answers do not advance the round and do not consume a target',
+        () {
+      final controller = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(22)),
+      );
+      GameState? state = controller.start();
+      for (var wrongAttempt = 0; wrongAttempt < 10; wrongAttempt++) {
+        final solving = state! as SolvingState;
+        final wrong = solving.round.options
+            .firstWhere((o) => o.id != solving.round.target.id);
+        final after = controller.onChoice(wrong.id);
+        expect(after, isA<SolvingState>(),
+            reason: 'a wrong answer must keep the round open');
+        expect((after as SolvingState).wrongChoiceId, wrong.id);
+        expect(controller.completedInSet, 0,
+            reason: 'wrong answers must not increment completedInSet');
+        state = after;
+      }
+      // Now finish correctly; the set still closes at 5.
+      final picks = <String>{};
+      for (var i = 0; i < 5; i++) {
+        final solving = state! as SolvingState;
+        picks.add(solving.round.target.id);
+        controller.onChoice(solving.round.target.id);
+        state = controller.onEffectFinished();
+      }
+      expect(state, isA<SetCompletedState>());
+      expect(picks, hasLength(5));
+    });
+  });
+
+  group('Issue #20 acceptance: option-count ladder 2/3/4 by totalCompleted', () {
+    test('set 1 (total 0-4) uses 2 options', () {
+      final controller = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(30)),
+      );
+      for (var i = 0; i < 4; i++) {
+        final state = controller.start() as SolvingState;
+        expect(state.optionCount, 2,
+            reason: 'set $i should use 2 options (total < 5)');
+        controller.onChoice(state.round.target.id);
+        controller.onEffectFinished();
+        controller.onContinue();
+      }
+    });
+
+    test('sets 2..4 (total 5..14) use 3 options', () {
+      // Total after 5 set completions: 25. Walk the 2nd, 3rd, 4th sets
+      // individually.
+      final controller = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(31)),
+      );
+      controller.start();
+      for (var i = 0; i < 5; i++) {
+        final s = controller.current! as SolvingState;
+        controller.onChoice(s.round.target.id);
+        controller.onEffectFinished();
+      }
+      controller.onContinue();
+      // First set of the 5..14 range.
+      expect(
+        (controller.current! as SolvingState).optionCount,
+        3,
+        reason: 'after 5 completions, optionCount climbs to 3',
+      );
+    });
+
+    test('sets 5+ (total >= 15) use 4 options', () {
+      // 6-item catalog supports optionCount=4 cleanly. Resume to 15 to
+      // verify the ladder (Issue #20: 0-4 -> 2, 5-14 -> 3, 15+ -> 4).
+      final controller = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(32)),
+      );
+      controller.resumeFromTotalCompleted(15);
+      final s15 = controller.current! as SolvingState;
+      expect(s15.optionCount, 4,
+          reason: 'after 15 completions, the next set uses 4 options');
+      // 14 completions still uses 3 options.
+      final controller14 = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(33)),
+      );
+      controller14.resumeFromTotalCompleted(14);
+      expect(
+        (controller14.current! as SolvingState).optionCount,
+        3,
+        reason: 'after 14 completions, the next set still uses 3 options',
+      );
+    });
+  });
 }
