@@ -26,12 +26,14 @@ class ShadowRound {
 ///    possible, but the banned set is ignored if no item is left.
 /// 2. Distractors are filled with (a) the hand-curated distractor list,
 ///    then (b) items from a *different* category than the target, then
-///    (c) any other item regardless of category, and only as a last
-///    resort (d) duplicate the target so the option count is preserved.
+///    (c) any other item regardless of category.
 ///
-/// Without this fallback, ban-heavy settings could collapse a round down
-/// to a single option and force the player to pick the only available
-/// tile (v6 spec §4 / Issue #30 review).
+/// **Hard guarantees (Issue #3):**
+/// * The catalog must contain `optionCount` items with unique ids; a
+///   duplicate id raises [ArgumentError] before any round is produced.
+/// * The factory must produce exactly `optionCount` options with unique
+///   ids; if the catalog cannot supply them (after relaxing bans), a
+///   [StateError] is raised. The factory never pads with the target id.
 class RoundFactory {
   RoundFactory({Random? random}) : _random = random ?? Random();
 
@@ -44,11 +46,20 @@ class RoundFactory {
     List<String> previousTargetIds = const <String>[],
     Set<String> bannedCategories = const <String>{},
   }) {
-    if (optionCount < 2 || catalog.length < optionCount) {
-      throw ArgumentError(
-        'RoundFactory needs at least $optionCount distinct items in the catalog',
+    if (optionCount < 2) {
+      throw ArgumentError.value(
+        optionCount,
+        'optionCount',
+        'must be at least 2 to form a meaningful question',
       );
     }
+    if (catalog.length < optionCount) {
+      throw ArgumentError(
+        'RoundFactory needs at least $optionCount distinct items in the catalog (got ${catalog.length})',
+      );
+    }
+    _assertCatalogIdsUnique(catalog);
+
     final alreadyUsed = <String>{
       if (previousTargetId != null) previousTargetId,
       ...previousTargetIds,
@@ -56,7 +67,9 @@ class RoundFactory {
     final byId = {for (final item in catalog) item.id: item};
 
     // 1. Pick the target. Try the banned-categories-respecting pool first;
-    //    relax the ban if it leaves nothing eligible.
+    //    relax the ban if it leaves nothing eligible. We *always* honour
+    //    `alreadyUsed` first; only the ban set is relaxed in the fallback
+    //    so the distractor uniqueness invariant holds.
     final target = _pickTarget(
       catalog: catalog,
       alreadyUsed: alreadyUsed,
@@ -95,9 +108,11 @@ class RoundFactory {
       }
     }
 
-    // 2c. Any remaining item, ignoring both the ban set and the
-    //     different-category preference. Without this, a small catalog
-    //     with heavy bans can leave the round with only one option.
+    // 2c. Any remaining item, ignoring the category preference but still
+    //     respecting the uniqueness invariant. Without this, a small
+    //     catalog with heavy bans could leave the round with only one
+    //     option. We deliberately do NOT touch the banned set here:
+    //     bans only affect target selection in step 1.
     if (distractors.length < optionCount - 1) {
       final anyOther = catalog
           .where((item) =>
@@ -111,11 +126,12 @@ class RoundFactory {
       }
     }
 
-    // 2d. Defensive: if the catalog is somehow smaller than optionCount
-    //     (the constructor guard should have caught this), pad with the
-    //     target itself so the row is at least visually full.
-    while (distractors.length < optionCount - 1) {
-      distractors.add(target);
+    if (distractors.length < optionCount - 1) {
+      throw StateError(
+        'RoundFactory could not fill $optionCount unique options '
+        '(only ${distractors.length + 1} available after relaxing bans; '
+        'catalog has ${catalog.length} items)',
+      );
     }
 
     final options = <ShadowItem>[target, ...distractors]..shuffle(_random);
@@ -135,8 +151,8 @@ class RoundFactory {
     if (respecting.isNotEmpty) {
       return respecting[_random.nextInt(respecting.length)];
     }
-    // Fallback: ignore the ban set (still respect the recent-target
-    // avoidance). This keeps a round playable even when the caller bans
+    // Fallback: ignore the ban set but still respect the recent-target
+    // avoidance. This keeps a round playable even when the caller bans
     // every category the catalog has.
     final relaxed = catalog
         .where((item) => !alreadyUsed.contains(item.id))
@@ -144,8 +160,27 @@ class RoundFactory {
     if (relaxed.isNotEmpty) {
       return relaxed[_random.nextInt(relaxed.length)];
     }
-    // All items were recently used. The only legal choice is to repeat one
-    // of them; pick the first so the round stays valid.
-    return catalog.first;
+    // Every catalog id is on the alreadyUsed list. Returning a duplicate
+    // would silently violate the uniqueness invariant the distractor
+    // pipeline enforces, so surface a hard error instead and let the
+    // caller (the GameController in our case) decide what to do.
+    throw StateError(
+      'RoundFactory could not pick a unique target: '
+      'every catalog id (${catalog.length}) is on the alreadyUsed list.',
+    );
+  }
+
+  /// Raises [ArgumentError] if the catalog contains two items with the
+  /// same id. We don't try to deduplicate silently — duplicates indicate
+  /// a real data bug that the caller (catalog loader) must fix.
+  void _assertCatalogIdsUnique(List<ShadowItem> catalog) {
+    final seen = <String>{};
+    for (final item in catalog) {
+      if (!seen.add(item.id)) {
+        throw ArgumentError(
+          'RoundFactory catalog contains duplicate id: ${item.id}',
+        );
+      }
+    }
   }
 }

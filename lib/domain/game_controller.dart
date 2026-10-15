@@ -78,8 +78,16 @@ class GameController {
   }
 
   GameState onContinue() {
-    // Begin the next set of questions.
+    // Begin the next set of questions. Drop the set's recent-target
+    // history but keep the very last target so the new set's first
+    // round avoids an immediate repeat. Without this, a 5-question set
+    // on a 6-item catalog would block the distractor pool in the next
+    // set (Issue #3 acceptance).
     _completedInSet = 0;
+    final last = _recentItems.isNotEmpty ? _recentItems.last : null;
+    _recentItems
+      ..clear()
+      ..addAll(last != null ? [last] : const <ShadowItem>[]);
     final next = SolvingState(
       round: _freshRound(),
       completedInSet: 0,
