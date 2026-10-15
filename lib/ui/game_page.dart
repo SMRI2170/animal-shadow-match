@@ -24,7 +24,12 @@ import 'single_asset_effect.dart';
 /// an in-memory progress store via [progressStore] so the whole flow can be
 /// driven without `SharedPreferences.setMockInitialValues` at every call site.
 class GamePage extends StatefulWidget {
-  const GamePage({super.key, this.progressStore, this.repository});
+  const GamePage({
+    super.key,
+    this.progressStore,
+    this.repository,
+    this.disableHandGuide = false,
+  });
 
   /// Optional injection point. Defaults to [SharedPreferencesGameProgressStore].
   final GameProgressStore? progressStore;
@@ -34,6 +39,11 @@ class GamePage extends StatefulWidget {
   /// callers leave this null to use the default [CatalogRepository] that reads
   /// from the Flutter [rootBundle].
   final CatalogRepository? repository;
+
+  /// When true, the first-set onboarding HandGuide is suppressed entirely
+  /// (used by widget tests so `pumpAndSettle` does not block on the
+  /// repeating AnimationController — Issue #21).
+  final bool disableHandGuide;
 
   @override
   State<GamePage> createState() => _GamePageState();
@@ -66,6 +76,7 @@ class _GamePageState extends State<GamePage> {
           result: snapshot.data!,
           factory: RoundFactory(random: Random()),
           progressStore: _progressStore,
+          disableHandGuide: widget.disableHandGuide,
         );
       },
     );
@@ -77,11 +88,13 @@ class _PlayBoard extends StatefulWidget {
     required this.result,
     required this.factory,
     required this.progressStore,
+    this.disableHandGuide = false,
   });
 
   final CatalogLoadResult result;
   final RoundFactory factory;
   final GameProgressStore progressStore;
+  final bool disableHandGuide;
 
   @override
   State<_PlayBoard> createState() => _PlayBoardState();
@@ -94,6 +107,9 @@ class _PlayBoardState extends State<_PlayBoard> {
   Timer? _wrongResetTimer;
   bool _showHandGuide = true;
   bool _resumed = false;
+
+  bool get _handGuideEnabled =>
+      _showHandGuide && !widget.disableHandGuide;
 
   @override
   void initState() {
@@ -258,7 +274,7 @@ class _PlayBoardState extends State<_PlayBoard> {
                   ),
                 ),
               ),
-              if (_showHandGuide && state.completedInSet == 0)
+              if (_handGuideEnabled && state.completedInSet == 0)
                 HandGuide(
                   targetBox: Rect.fromCenter(
                     center: Offset(

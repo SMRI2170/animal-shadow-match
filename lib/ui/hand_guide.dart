@@ -6,6 +6,12 @@ import 'package:flutter/material.dart';
 /// the centre option once, then disappears. The widget holds no game state
 /// — it loops locally while the player is idle and self-removes when the
 /// parent unmounts it (typically the first time the player taps an option).
+///
+/// Honours `MediaQuery.disableAnimations` (Issue #21 reduce-motion): the
+/// AnimationController is created but never started, so the widget
+/// still renders a static finger at the top of the target box without
+/// triggering a repeating ticker that would block `pumpAndSettle` in
+/// widget tests.
 class HandGuide extends StatefulWidget {
   const HandGuide({
     super.key,
@@ -24,6 +30,7 @@ class HandGuide extends StatefulWidget {
 class _HandGuideState extends State<HandGuide>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  bool _animationsDisabled = false;
 
   @override
   void initState() {
@@ -31,7 +38,27 @@ class _HandGuideState extends State<HandGuide>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1600),
-    )..repeat();
+    );
+    // We can't read MediaQuery here (dependOnInheritedWidgetOfExactType
+    // is not legal before initState completes). Start repeating by
+    // default; didChangeDependencies will stop us if reduce-motion is
+    // on.
+    _controller.repeat();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reduce-motion can change at runtime (settings panel); honour it.
+    final disabled =
+        MediaQuery.of(context).disableAnimations;
+    if (disabled == _animationsDisabled) return;
+    _animationsDisabled = disabled;
+    if (disabled) {
+      if (_controller.isAnimating) _controller.stop();
+    } else {
+      if (!_controller.isAnimating) _controller.repeat();
+    }
   }
 
   @override
@@ -48,7 +75,9 @@ class _HandGuideState extends State<HandGuide>
           AnimatedBuilder(
             animation: _controller,
             builder: (context, _) {
-              final t = Curves.easeInOut.transform(_controller.value);
+              final t = _controller.isAnimating
+                  ? Curves.easeInOut.transform(_controller.value)
+                  : 0.0;
               final startY = widget.targetBox.top - 80;
               final endY = widget.targetBox.center.dy;
               final y = startY + (endY - startY) * t;
