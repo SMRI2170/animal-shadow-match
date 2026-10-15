@@ -87,6 +87,14 @@ String _legacyAnimalsJson() => jsonEncode({
           'category': 'farm',
           'distractors': [],
         },
+        {
+          'id': 'whale',
+          'name': 'Whale',
+          'image': 'assets/animals/whale.webp',
+          'shadow': 'assets/animals/whale_shadow.webp',
+          'category': 'ocean',
+          'distractors': [],
+        },
       ],
     });
 
@@ -117,7 +125,7 @@ void main() {
     });
     final repo = CatalogRepository.test(bundle, theme: CatalogTheme.legacyOnly);
     final result = await repo.load();
-    expect(result.items, hasLength(4));
+    expect(result.items, hasLength(5));
     expect(result.sources, equals({CatalogSource.legacyAnimals}));
     expect(result.hasLiveItems, isFalse);
     expect(result.hasPlaceholders, isFalse);
@@ -131,6 +139,7 @@ void main() {
         'cloud_cushion',
         'teardrop_gummy',
         'twist_gummy',
+        'puzzle_bean',
       ]),
     });
     final repo = CatalogRepository.test(bundle, theme: CatalogTheme.all);
@@ -142,9 +151,9 @@ void main() {
         equals({CatalogSource.legacyAnimals, CatalogSource.itemsV6}));
   });
 
-  test('refuses catalogs with fewer than four items', () async {
+  test('refuses catalogs with fewer than five items (Issue #29)', () async {
     final bundle = _MemoryAssetBundle({
-      'assets/catalog/items.json': _itemsJson(['a', 'b', 'c']),
+      'assets/catalog/items.json': _itemsJson(['a', 'b', 'c', 'd']),
     });
     final repo = CatalogRepository.test(bundle);
     await expectLater(
@@ -199,14 +208,97 @@ void main() {
       () async {
     final bundle = _MemoryAssetBundle({
       'assets/catalog/development.json':
-          _developmentJson(['dev_a', 'dev_b', 'dev_c', 'dev_d']),
+          _developmentJson(['dev_a', 'dev_b', 'dev_c', 'dev_d', 'dev_e']),
     });
     final repo = CatalogRepository.test(bundle);
     await expectLater(
       repo.load,
       throwsA(isA<FormatException>()),
-      reason: 'should not read development.json without the switch',
+      reason:
+          'should not read development.json without the dart-define or '
+          'a developmentOnly theme',
     );
+  });
+
+  test(
+      'developmentOnly theme reads development.json when dart-define is on',
+      () async {
+    final bundle = _MemoryAssetBundle({
+      'assets/catalog/development.json': _developmentJson(
+          ['dev_a', 'dev_b', 'dev_c', 'dev_d', 'dev_e']),
+    });
+    final repo = CatalogRepository.test(
+      bundle,
+      theme: CatalogTheme.developmentOnly,
+      developmentAssetsEnabled: true,
+    );
+    final result = await repo.load();
+    expect(result.items, hasLength(5));
+    expect(result.sources,
+        equals({CatalogSource.developmentPlaceholders}));
+  });
+
+  test('v6Only theme never picks up development.json even when it exists',
+      () async {
+    final bundle = _MemoryAssetBundle({
+      'assets/catalog/development.json': _developmentJson(
+          ['dev_a', 'dev_b', 'dev_c', 'dev_d', 'dev_e']),
+    });
+    final repo = CatalogRepository.test(
+      bundle,
+      theme: CatalogTheme.v6Only,
+      developmentAssetsEnabled: true,
+    );
+    // v6Only + only development.json present => no entries => 5-item gate
+    // raises FormatException, NOT the development pool.
+    await expectLater(
+      repo.load,
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('legacyOnly theme never picks up development.json', () async {
+    final bundle = _MemoryAssetBundle({
+      'assets/catalog/animals.json': _legacyAnimalsJson(),
+      'assets/catalog/development.json': _developmentJson(
+          ['dev_a', 'dev_b', 'dev_c', 'dev_d', 'dev_e']),
+    });
+    final repo = CatalogRepository.test(
+      bundle,
+      theme: CatalogTheme.legacyOnly,
+      developmentAssetsEnabled: true,
+    );
+    final result = await repo.load();
+    expect(result.sources, equals({CatalogSource.legacyAnimals}));
+    expect(result.hasPlaceholders, isFalse);
+  });
+
+  test('all theme merges every source, but unique-by-id wins', () async {
+    final bundle = _MemoryAssetBundle({
+      'assets/catalog/animals.json': _legacyAnimalsJson(),
+      'assets/catalog/items.json': _itemsJson([
+        'gel_star',
+        'cloud_cushion',
+        'teardrop_gummy',
+        'twist_gummy',
+        'puzzle_bean',
+      ]),
+      'assets/catalog/development.json': _developmentJson(
+          ['dev_a', 'dev_b', 'dev_c', 'dev_d', 'dev_e']),
+    });
+    final repo = CatalogRepository.test(
+      bundle,
+      theme: CatalogTheme.all,
+      developmentAssetsEnabled: true,
+    );
+    final result = await repo.load();
+    expect(result.sources, equals({
+      CatalogSource.legacyAnimals,
+      CatalogSource.itemsV6,
+      CatalogSource.developmentPlaceholders,
+    }));
+    // 5 legacy + 5 items + 5 dev = 15 unique ids.
+    expect(result.items.length, 15);
   });
 
   test('CatalogLoadResult.hasPlaceholders reflects the source set', () {

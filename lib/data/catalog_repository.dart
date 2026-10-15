@@ -27,27 +27,48 @@ import 'catalog_theme.dart';
 /// from there are merged by id with the live catalog and shadow the
 /// legacy name onto the new [ShadowItem.accessibilityLabel]. To stop
 /// mixing the v4 and v6 silhouettes, callers pick a [CatalogTheme].
+///
+/// **Issue #29 contract:** the development placeholder pool is NEVER
+/// served by `v6Only`. The only way to consume it is to select
+/// [CatalogTheme.developmentOnly] (or [CatalogTheme.all] for one-off
+/// comparison runs). The playability gate (≥5 unique items) is checked
+/// in [load] so the UI can render a friendly "no playable set" state
+/// instead of letting [RoundFactory] throw deep inside a game loop.
 class CatalogRepository {
   /// Production constructor: uses [rootBundle] to resolve assets.
   /// Not `const` because the optional test bundle requires a heap object.
   CatalogRepository({CatalogTheme? theme})
       : theme = theme ?? catalogThemeFromEnvironment(),
-        _bundle = null;
+        _bundle = null,
+        _developmentAssetsEnabled = null;
 
   /// Test override: pass a fake bundle that resolves every key in memory.
   @visibleForTesting
   CatalogRepository.test(
     AssetBundle bundle, {
     this.theme = CatalogTheme.v6Only,
-  }) : _bundle = bundle;
+    bool? developmentAssetsEnabled,
+  })  : _bundle = bundle,
+        _developmentAssetsEnabled = developmentAssetsEnabled;
 
-  /// Restrict the catalog to a specific source (v6 / legacy / all). When
-  /// null in production, the value is read from the `CATALOG_THEME`
-  /// `--dart-define` flag; the default is [CatalogTheme.v6Only].
+  /// Restrict the catalog to a specific source. When null in production,
+  /// the value is read from the `CATALOG_THEME` `--dart-define` flag;
+  /// the default is [CatalogTheme.v6Only].
   final CatalogTheme? theme;
 
-  final AssetBundle? _bundle;
+  /// Minimum number of unique items required to start a 5-question set
+  /// (Issue #29: distinguish 4-distractor playability from 5-set
+  /// playability). Below this threshold [load] throws a [FormatException]
+  /// carrying a clear "no playable set" message.
+  static const int minItemsForPlayableSet = 5;
 
+  final AssetBundle? _bundle;
+  final bool? _developmentAssetsEnabled;
+
+  /// Whether the development placeholder pool is bundled into the running
+  /// build. Controlled at build time via
+  /// `--dart-define ENABLE_DEVELOPMENT_ASSETS=1`. Tests override this
+  /// per-instance via [CatalogRepository.test].
   static const bool developmentAssetsEnabled =
       bool.fromEnvironment('ENABLE_DEVELOPMENT_ASSETS', defaultValue: false);
 
@@ -57,8 +78,19 @@ class CatalogRepository {
     final byId = <String, ShadowItem>{};
     final sources = <CatalogSource>{};
 
-    if (effectiveTheme == CatalogTheme.all ||
-        effectiveTheme == CatalogTheme.legacyOnly) {
+    // Issue #29: the development placeholder pool is *opt-in*. We never
+    // append it to v6Only / legacyOnly — the only way to consume it is
+    // `developmentOnly` or `all` (the comparison-only mode).
+    final includeLegacy = effectiveTheme == CatalogTheme.all ||
+        effectiveTheme == CatalogTheme.legacyOnly;
+    final includeV6 = effectiveTheme == CatalogTheme.all ||
+        effectiveTheme == CatalogTheme.v6Only;
+    final devEnabled = _developmentAssetsEnabled ?? developmentAssetsEnabled;
+    final includeDev = devEnabled &&
+        (effectiveTheme == CatalogTheme.all ||
+            effectiveTheme == CatalogTheme.developmentOnly);
+
+    if (includeLegacy) {
       final legacy = await _tryLoad(resolver, 'assets/catalog/animals.json');
       if (legacy != null) {
         sources.add(CatalogSource.legacyAnimals);
@@ -68,8 +100,7 @@ class CatalogRepository {
       }
     }
 
-    if (effectiveTheme == CatalogTheme.all ||
-        effectiveTheme == CatalogTheme.v6Only) {
+    if (includeV6) {
       final items = await _tryLoad(resolver, 'assets/catalog/items.json');
       if (items != null) {
         sources.add(CatalogSource.itemsV6);
@@ -79,7 +110,7 @@ class CatalogRepository {
       }
     }
 
-    if (developmentAssetsEnabled) {
+    if (includeDev) {
       final dev =
           await _tryLoad(resolver, 'assets/catalog/development.json');
       if (dev != null) {
@@ -91,9 +122,12 @@ class CatalogRepository {
     }
 
     final entries = byId.values.toList(growable: false);
-    if (entries.length < 4) {
+    if (entries.length < minItemsForPlayableSet) {
       throw FormatException(
-        'Catalog requires at least 4 items (currently ${entries.length})',
+        'Catalog needs at least $minItemsForPlayableSet unique items to '
+        'start a 5-question set (got ${entries.length} from $sources). '
+        'Pick a different CatalogTheme or add approved images to '
+        'items.json (Issue #29).',
       );
     }
     return CatalogLoadResult(items: entries, sources: sources);

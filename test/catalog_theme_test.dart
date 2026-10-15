@@ -9,9 +9,13 @@ void main() {
     expect(catalogThemeFromEnvironment(value: 'v6'), CatalogTheme.v6Only);
   });
 
-  test('catalogThemeFromEnvironment accepts legacy and all explicitly', () {
+  test('catalogThemeFromEnvironment accepts legacy / development / all', () {
     expect(catalogThemeFromEnvironment(value: 'legacy'),
         CatalogTheme.legacyOnly);
+    expect(catalogThemeFromEnvironment(value: 'development'),
+        CatalogTheme.developmentOnly);
+    expect(catalogThemeFromEnvironment(value: 'dev'),
+        CatalogTheme.developmentOnly);
     expect(catalogThemeFromEnvironment(value: 'all'), CatalogTheme.all);
   });
 
