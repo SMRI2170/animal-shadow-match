@@ -22,6 +22,7 @@ class ClipSplitEffect extends StatefulWidget {
     required this.assetPath,
     this.splitOffset = 18,
     this.duration = const Duration(milliseconds: 750),
+    this.tileSize = 256,
     this.onCompleted,
   });
 
@@ -29,6 +30,11 @@ class ClipSplitEffect extends StatefulWidget {
   final String assetPath;
   final double splitOffset;
   final Duration duration;
+
+  /// Side length of the square each half-clip renders into. Defaults to 256
+  /// so a [Row] of two halves (512 total) fits within the standard 800px test
+  /// viewport without overflowing.
+  final double tileSize;
   final VoidCallback? onCompleted;
 
   @override
@@ -58,7 +64,12 @@ class _ClipSplitEffectState extends State<ClipSplitEffect>
 
   @override
   Widget build(BuildContext context) {
-    final image = Image.asset(widget.assetPath, fit: BoxFit.contain);
+    final image = Image.asset(
+      widget.assetPath,
+      fit: BoxFit.contain,
+      width: widget.tileSize,
+      height: widget.tileSize,
+    );
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
@@ -67,6 +78,7 @@ class _ClipSplitEffectState extends State<ClipSplitEffect>
         return Row(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             ClipRect(
               clipper: _LeftHalfClipper(),
