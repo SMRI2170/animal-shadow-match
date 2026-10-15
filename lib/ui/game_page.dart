@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../data/catalog_load_result.dart';
 import '../data/catalog_repository.dart';
 import '../domain/round_factory.dart';
 import '../domain/shadow_item.dart';
@@ -16,12 +17,13 @@ class GamePage extends StatefulWidget {
 }
 
 class _GamePageState extends State<GamePage> {
-  late final Future<List<ShadowItem>> _items = const CatalogRepository().load();
+  late final Future<CatalogLoadResult> _catalogFuture =
+      CatalogRepository().load();
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<ShadowItem>>(
-      future: _items,
+    return FutureBuilder<CatalogLoadResult>(
+      future: _catalogFuture,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return const Scaffold(
@@ -35,23 +37,26 @@ class _GamePageState extends State<GamePage> {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        return _PlayBoard(items: snapshot.data!);
+        return _PlayBoard(
+          result: snapshot.data!,
+          factory: RoundFactory(random: Random()),
+        );
       },
     );
   }
 }
 
 class _PlayBoard extends StatefulWidget {
-  const _PlayBoard({required this.items});
+  const _PlayBoard({required this.result, required this.factory});
 
-  final List<ShadowItem> items;
+  final CatalogLoadResult result;
+  final RoundFactory factory;
 
   @override
   State<_PlayBoard> createState() => _PlayBoardState();
 }
 
 class _PlayBoardState extends State<_PlayBoard> {
-  final RoundFactory _factory = RoundFactory(random: Random());
   late ShadowRound _round;
   int _completed = 0;
   bool _solved = false;
@@ -65,7 +70,10 @@ class _PlayBoardState extends State<_PlayBoard> {
   @override
   void initState() {
     super.initState();
-    _round = _factory.create(catalog: widget.items, optionCount: _optionCount);
+    _round = widget.factory.create(
+      catalog: widget.result.items,
+      optionCount: _optionCount,
+    );
   }
 
   @override
@@ -85,8 +93,8 @@ class _PlayBoardState extends State<_PlayBoard> {
     _nextRoundTimer?.cancel();
     setState(() {
       _completed += 1;
-      _round = _factory.create(
-        catalog: widget.items,
+      _round = widget.factory.create(
+        catalog: widget.result.items,
         optionCount: _optionCount,
         previousTargetId: previousTarget,
       );
@@ -106,8 +114,6 @@ class _PlayBoardState extends State<_PlayBoard> {
         _effectPlaying = true;
       });
       _nextRoundTimer?.cancel();
-      // 1.1s base reaction window; actual advance happens when the effect's
-      // SingleAssetEffect widget calls back via [SingleAssetEffect.onCompleted].
       _nextRoundTimer = Timer(const Duration(milliseconds: 1200), _advanceRound);
     } else {
       setState(() => _wrongChoice = item.id);
@@ -128,6 +134,7 @@ class _PlayBoardState extends State<_PlayBoard> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             children: [
+              if (widget.result.hasPlaceholders) _DemoBadge(),
               SizedBox(
                 height: 38,
                 child: Row(
@@ -159,7 +166,8 @@ class _PlayBoardState extends State<_PlayBoard> {
                           ? SingleAssetEffect(
                               item: _round.target,
                               assetPath: _round.target.imagePath,
-                              onCompleted: _effectPlaying ? _onEffectCompleted : null,
+                              onCompleted:
+                                  _effectPlaying ? _onEffectCompleted : null,
                             )
                           : AnimatedScale(
                               duration: const Duration(milliseconds: 280),
@@ -186,7 +194,8 @@ class _PlayBoardState extends State<_PlayBoard> {
                         for (final item in _round.options)
                           Semantics(
                             button: true,
-                            label: '${item.accessibilityLabel ?? item.id} silhouette',
+                            label:
+                                '${item.accessibilityLabel ?? item.id} silhouette',
                             child: GestureDetector(
                               onTap: () => _choose(item),
                               child: AnimatedContainer(
@@ -226,6 +235,32 @@ class _PlayBoardState extends State<_PlayBoard> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tiny badge shown only while [CatalogLoadResult.hasPlaceholders] is true.
+/// Helps reviewers notice when a build was run with
+/// `ENABLE_DEVELOPMENT_ASSETS=1`.
+class _DemoBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF1DA),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'DEMO / placeholder assets',
+          style: TextStyle(
+            fontSize: 12,
+            color: Color(0xFF8A6E2F),
           ),
         ),
       ),

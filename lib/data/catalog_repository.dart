@@ -1,55 +1,91 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../domain/animal.dart';
 import '../domain/shadow_item.dart';
+import 'catalog_load_result.dart';
+import 'catalog_source.dart';
 
 /// Loads the playable catalog from the bundled JSON assets.
 ///
-/// During the staged migration (Issue #29) the repository accepts both the
-/// legacy `animals.json` and the new `items.json`. New items are taken from
-/// `items.json`; if that file is missing, the loader falls back to the
-/// existing `animals.json` so the demo game keeps running while the v6
-/// pipeline produces real objects.
+/// Supports three operating modes (S2/S1/S0) as documented in
+/// `docs/GAME_LOGIC_WITHOUT_IMAGES_JA.md` §1:
 ///
-/// The two lists are merged by id. Conflicts (same id in both files) are
-/// resolved in favor of the new `items.json` entry so the curated PR
-/// pipeline can override demo defaults without touching the 8 placeholders.
+/// * **S2 live** — `assets/catalog/items.json` populated by
+///   the Draft-PR pipeline (`promote-minimax-assets.yml`).
+/// * **S1 placeholder** — `assets/catalog/development.json` shipped with
+///   the project under `assets/development/`. Only read when the build was
+///   started with `--dart-define ENABLE_DEVELOPMENT_ASSETS=1`, so production
+///   bundles can never ship placeholders by accident.
+/// * **S0 absent** — neither JSON exists. The UI will surface a friendly
+///   "Catalog empty" state.
+///
+/// Legacy `animals.json` is still loaded as a regression baseline; entries
+/// from there are merged by id with the live catalog and shadow the
+/// legacy name onto the new [ShadowItem.accessibilityLabel].
 class CatalogRepository {
-  const CatalogRepository();
+  /// Production constructor: uses [rootBundle] to resolve assets.
+  /// Not `const` because the optional test bundle requires a heap object.
+  CatalogRepository() : _bundle = null;
 
-  Future<List<ShadowItem>> load() async {
+  /// Test override: pass a fake bundle that resolves every key in memory.
+  @visibleForTesting
+  CatalogRepository.test(AssetBundle bundle) : _bundle = bundle;
+
+  final AssetBundle? _bundle;
+
+  static const bool developmentAssetsEnabled =
+      bool.fromEnvironment('ENABLE_DEVELOPMENT_ASSETS', defaultValue: false);
+
+  Future<CatalogLoadResult> load() async {
+    final resolver = _bundle ?? rootBundle;
     final byId = <String, ShadowItem>{};
-    final legacy = await _tryLoad('assets/catalog/animals.json');
+    final sources = <CatalogSource>{};
+
+    final legacy = await _tryLoad(resolver, 'assets/catalog/animals.json');
     if (legacy != null) {
+      sources.add(CatalogSource.legacyAnimals);
       for (final entry in legacy) {
         byId[entry.id] = entry;
       }
     }
-    final items = await _tryLoad('assets/catalog/items.json');
+
+    final items = await _tryLoad(resolver, 'assets/catalog/items.json');
     if (items != null) {
+      sources.add(CatalogSource.itemsV6);
       for (final entry in items) {
         byId[entry.id] = entry;
       }
     }
-    if (byId.isEmpty) {
-      throw const FormatException(
-        'Catalog is empty: provide assets/catalog/items.json and/or animals.json',
-      );
+
+    if (developmentAssetsEnabled) {
+      final dev =
+          await _tryLoad(resolver, 'assets/catalog/development.json');
+      if (dev != null) {
+        sources.add(CatalogSource.developmentPlaceholders);
+        for (final entry in dev) {
+          byId[entry.id] = entry;
+        }
+      }
     }
+
     final entries = byId.values.toList(growable: false);
     if (entries.length < 4) {
       throw FormatException(
         'Catalog requires at least 4 items (currently ${entries.length})',
       );
     }
-    return entries;
+    return CatalogLoadResult(items: entries, sources: sources);
   }
 
-  Future<List<ShadowItem>?> _tryLoad(String key) async {
+  Future<List<ShadowItem>?> _tryLoad(
+    AssetBundle resolver,
+    String key,
+  ) async {
     try {
-      final raw = await rootBundle.loadString(key);
+      final raw = await resolver.loadString(key);
       final json = jsonDecode(raw) as Map<String, dynamic>;
       final data = json['items'] ?? json['animals'];
       if (data is! List) return null;
