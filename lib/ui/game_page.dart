@@ -29,6 +29,7 @@ class GamePage extends StatefulWidget {
     this.progressStore,
     this.repository,
     this.disableHandGuide = false,
+    this.imageBundle,
   });
 
   /// Optional injection point. Defaults to [SharedPreferencesGameProgressStore].
@@ -44,6 +45,12 @@ class GamePage extends StatefulWidget {
   /// (used by widget tests so `pumpAndSettle` does not block on the
   /// repeating AnimationController — Issue #21).
   final bool disableHandGuide;
+
+  /// Optional [AssetBundle] that resolves every Image.asset under the
+  /// GamePage. Widget tests inject an in-memory bundle to avoid
+  /// `rootBundle.load('AssetManifest.bin')` failures (Issue #21
+  /// follow-up: full GamePage widget test).
+  final AssetBundle? imageBundle;
 
   @override
   State<GamePage> createState() => _GamePageState();
@@ -77,6 +84,7 @@ class _GamePageState extends State<GamePage> {
           factory: RoundFactory(random: Random()),
           progressStore: _progressStore,
           disableHandGuide: widget.disableHandGuide,
+          imageBundle: widget.imageBundle,
         );
       },
     );
@@ -89,12 +97,14 @@ class _PlayBoard extends StatefulWidget {
     required this.factory,
     required this.progressStore,
     this.disableHandGuide = false,
+    this.imageBundle,
   });
 
   final CatalogLoadResult result;
   final RoundFactory factory;
   final GameProgressStore progressStore;
   final bool disableHandGuide;
+  final AssetBundle? imageBundle;
 
   @override
   State<_PlayBoard> createState() => _PlayBoardState();
@@ -244,6 +254,7 @@ class _PlayBoardState extends State<_PlayBoard> {
                       child: Image.asset(
                         state.round.target.imagePath,
                         fit: BoxFit.contain,
+                        bundle: widget.imageBundle,
                         semanticLabel: 'Find the matching silhouette for '
                             '${state.round.target.accessibilityLabel ?? state.round.target.id}',
                       ),
@@ -268,6 +279,7 @@ class _PlayBoardState extends State<_PlayBoard> {
                             isCorrectChoice: false,
                             isWrongChoice: _wrongChoice == item.id,
                             onTap: () => _onChoice(item),
+                            imageBundle: widget.imageBundle,
                           ),
                       ],
                     ),
@@ -340,6 +352,7 @@ class _PlayBoardState extends State<_PlayBoard> {
                             isCorrectChoice: item.id == state.round.target.id,
                             isWrongChoice: false,
                             onTap: null,
+                            imageBundle: widget.imageBundle,
                           ),
                       ],
                     ),
@@ -407,6 +420,7 @@ class _OptionTile extends StatelessWidget {
     required this.isCorrectChoice,
     required this.isWrongChoice,
     required this.onTap,
+    this.imageBundle,
   });
 
   /// Stable key string used by integration tests to find this tile.
@@ -416,6 +430,7 @@ class _OptionTile extends StatelessWidget {
   final bool isCorrectChoice;
   final bool isWrongChoice;
   final VoidCallback? onTap;
+  final AssetBundle? imageBundle;
 
   @override
   Widget build(BuildContext context) {
@@ -447,6 +462,7 @@ class _OptionTile extends StatelessWidget {
           child: Image.asset(
             item.shadowPath,
             fit: BoxFit.contain,
+            bundle: imageBundle,
             semanticLabel:
                 '${item.accessibilityLabel ?? item.id} silhouette',
           ),

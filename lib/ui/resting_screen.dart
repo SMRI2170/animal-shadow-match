@@ -12,10 +12,17 @@ class RestingScreen extends StatelessWidget {
     super.key,
     required this.items,
     this.onResume,
+    this.imageBundle,
   });
 
   final List<ShadowItem> items;
   final VoidCallback? onResume;
+
+  /// Optional [AssetBundle] that resolves the tiles' Image.asset under
+  /// the resting screen. Widget tests inject an in-memory bundle to
+  /// avoid `rootBundle.load('AssetManifest.bin')` failures (Issue #21
+  /// follow-up: full GamePage widget test).
+  final AssetBundle? imageBundle;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +55,7 @@ class RestingScreen extends StatelessWidget {
                     spacing: 16,
                     runSpacing: 16,
                     children: [
-                      for (final item in items) _RestingTile(item: item),
+                      for (final item in items) _RestingTile(item: item, bundle: imageBundle),
                     ],
                   ),
           ),
@@ -59,9 +66,10 @@ class RestingScreen extends StatelessWidget {
 }
 
 class _RestingTile extends StatefulWidget {
-  const _RestingTile({required this.item});
+  const _RestingTile({required this.item, this.bundle});
 
   final ShadowItem item;
+  final AssetBundle? bundle;
 
   @override
   State<_RestingTile> createState() => _RestingTileState();
@@ -98,7 +106,11 @@ class _RestingTileState extends State<_RestingTile>
             padding: const EdgeInsets.all(8),
             child: Opacity(
               opacity: 0.75,
-              child: Image.asset(widget.item.imagePath, fit: BoxFit.contain),
+              child: Image.asset(
+                widget.item.imagePath,
+                fit: BoxFit.contain,
+                bundle: widget.bundle,
+              ),
             ),
           ),
         );
