@@ -18,3 +18,4 @@ android/key.properties
 **/Flutter/ephemeral/
 assets/source/*
 !assets/source/.gitkeep
+assets/development/ai_demo_raw/
