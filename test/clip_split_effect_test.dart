@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_const_constructors
+
 import 'package:animal_shadow_match/domain/effect_preset.dart';
 import 'package:animal_shadow_match/domain/shadow_item.dart';
 import 'package:animal_shadow_match/ui/clip_split_effect.dart';

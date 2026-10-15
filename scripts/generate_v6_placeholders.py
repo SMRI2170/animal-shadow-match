@@ -293,7 +293,30 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ids", default="", help="Comma-separated subset.")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--strict", action="store_true")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Override the WebP output directory. Defaults to "
+            "assets/development/ inside the project. Required when "
+            "running in a scratch dir (CI scratch temp)."
+        ),
+    )
+    parser.add_argument(
+        "--skip-index",
+        action="store_true",
+        help="Skip writing assets/catalog/development.json (CI scratch use).",
+    )
     args = parser.parse_args(argv)
+
+    if args.output_dir is not None:
+        global OUT_DIR, OUT_JSON
+        OUT_DIR = args.output_dir
+        # OUT_JSON kept to its default unless --skip-index; we just route the
+        # index below based on args.skip_index to avoid touching the real
+        # catalog/development.json from CI.
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     catalog = load_catalog()
     items = catalog.get("items", [])
@@ -316,9 +339,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"DRY: would render {item['id']} ({item['category']})")
             continue
         color, shadow = render_one(item)
-        print(f"wrote {color.relative_to(ROOT)} + {shadow.relative_to(ROOT)}")
+        try:
+            color_rel = color.relative_to(ROOT)
+        except ValueError:
+            color_rel = color
+        try:
+            shadow_rel = shadow.relative_to(ROOT)
+        except ValueError:
+            shadow_rel = shadow
+        print(f"wrote {color_rel} + {shadow_rel}")
 
     if args.dry_run:
+        return 0
+
+    if args.skip_index:
         return 0
 
     write_development_index([
@@ -334,7 +368,11 @@ def main(argv: list[str] | None = None) -> int:
         for item in items
         if _safe_id(item["id"])
     ])
-    print(f"wrote {OUT_JSON.relative_to(ROOT)}")
+    try:
+        json_rel = OUT_JSON.relative_to(ROOT)
+    except ValueError:
+        json_rel = OUT_JSON
+    print(f"wrote {json_rel}")
     return 0
 
 

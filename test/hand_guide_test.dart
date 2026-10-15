@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_const_constructors
+
 import 'package:animal_shadow_match/ui/hand_guide.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,7 +21,7 @@ void main() {
                 child: Container(key: key, color: Colors.amber),
               ),
               HandGuide(
-                targetBox: const Rect.fromLTWH(40, 60, 80, 80),
+                targetBox: Rect.fromLTWH(40, 60, 80, 80),
               ),
             ],
           ),

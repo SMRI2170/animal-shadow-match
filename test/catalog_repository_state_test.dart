@@ -215,12 +215,14 @@ void main() {
     );
     expect(none.hasPlaceholders, isFalse);
     expect(none.hasLiveItems, isFalse);
+    // ignore: prefer_const_constructors
     final liveOnly = CatalogLoadResult(
       items: const <ShadowItem>[],
       sources: <CatalogSource>{CatalogSource.itemsV6},
     );
     expect(liveOnly.hasPlaceholders, isFalse);
     expect(liveOnly.hasLiveItems, isTrue);
+    // ignore: prefer_const_constructors
     final placeholder = CatalogLoadResult(
       items: const <ShadowItem>[],
       sources: <CatalogSource>{CatalogSource.developmentPlaceholders},
