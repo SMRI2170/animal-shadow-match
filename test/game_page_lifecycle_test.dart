@@ -27,14 +27,12 @@ Future<void> _playCorrectlyThrough(GameController controller) async {
   for (var i = 0; i < 5; i++) {
     final solving = controller.current! as SolvingState;
     final next = controller.onChoice(solving.round.target.id);
-    // The 5th correct answer lands us on SetCompletedState instead of
-    // SolvedState; the widget takes the same onContinue path either way.
-    if (next is SetCompletedState) {
-      return;
-    }
+    // Every correct answer lands on SolvedState (so the FX plays); the
+    // final answer's onEffectFinished returns SetCompletedState.
     expect(next, isA<SolvedState>(),
         reason: 'round $i should reach SolvedState');
-    controller.onEffectFinished();
+    final after = controller.onEffectFinished();
+    if (after is SetCompletedState) return;
   }
   // Defensive: if for any reason the loop above exited without returning,
   // we must have ended on SetCompletedState.
@@ -128,9 +126,11 @@ void main() {
       controller.onEffectFinished();
       await persist(controller);
     }
-    // The fifth tap closes the set.
+    // The fifth tap closes the set: answer -> SolvedState -> onEffectFinished
+    // -> SetCompletedState.
     final solving = controller.current! as SolvingState;
     controller.onChoice(solving.round.target.id);
+    controller.onEffectFinished();
     await persist(controller);
     expect(controller.current, isA<SetCompletedState>());
 

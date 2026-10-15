@@ -8,15 +8,21 @@ import 'single_asset_effect.dart';
 /// Lays out up to five [ShadowItem]s in a wrap, each individually tappable.
 /// A successful tap plays the FX preset (same as in-game) so the child can
 /// replay their favourite objects after a set completes.
+///
+/// [onRest] is the optional callback for the Rest button. When provided,
+/// the AppBar shows a "Rest" action that pauses the session so the
+/// caregiver can step away without losing progress (Issue #86 review).
 class ReviewPlayArea extends StatelessWidget {
   const ReviewPlayArea({
     super.key,
     required this.items,
     this.onContinue,
+    this.onRest,
   });
 
   final List<ShadowItem> items;
   final VoidCallback? onContinue;
+  final VoidCallback? onRest;
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +32,14 @@ class ReviewPlayArea extends StatelessWidget {
         backgroundColor: const Color(0xFFFFF9F0),
         elevation: 0,
         actions: [
+          if (onRest != null)
+            TextButton(
+              onPressed: onRest,
+              child: const Text(
+                'Rest',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
           if (onContinue != null)
             TextButton(
               onPressed: onContinue,

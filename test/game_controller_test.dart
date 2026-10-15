@@ -84,11 +84,12 @@ void main() {
     for (var i = 0; i < 5; i++) {
       final solving = state as SolvingState;
       state = controller.onChoice(solving.round.target.id);
-      // Only the last answer transitions to SetCompleted.
-      if (i < 4) {
-        expect(state, isA<SolvedState>());
-        state = controller.onEffectFinished();
-      }
+      // Every correct answer lands on SolvedState (so the FX plays),
+      // then onEffectFinished advances. The 5th answer's
+      // onEffectFinished returns SetCompletedState.
+      expect(state, isA<SolvedState>(),
+          reason: 'round $i must reach SolvedState so the FX plays');
+      state = controller.onEffectFinished();
     }
     expect(state, isA<SetCompletedState>());
     final completed = state as SetCompletedState;
@@ -104,13 +105,13 @@ void main() {
     for (var i = 0; i < 5; i++) {
       final solving = state as SolvingState;
       state = controller.onChoice(solving.round.target.id);
-      if (i < 4) state = controller.onEffectFinished();
+      state = controller.onEffectFinished();
     }
     expect(state, isA<SetCompletedState>());
     final next = controller.onContinue() as SolvingState;
     expect(next.completedInSet, 0);
-    expect(next.round.options.length, 2,
-        reason: 'first set is always 2 options');
+    expect(next.round.options.length, 3,
+        reason: 'after 5 completions, the next set uses 3 options');
   });
 
   test('optionCount climbs to 3 once _totalCompleted crosses 5', () {
@@ -120,16 +121,70 @@ void main() {
     );
     expect((controller.start() as SolvingState).optionCount, 2);
     SolvingState state = controller.start() as SolvingState;
+    GameState? after = state;
     for (var i = 0; i < 5; i++) {
-      GameState next = controller.onChoice(state.round.target.id);
-      if (next is SetCompletedState) {
-        state = controller.onContinue() as SolvingState;
-        continue;
+      final solving = state;
+      controller.onChoice(solving.round.target.id);
+      after = controller.onEffectFinished();
+      if (i < 4) {
+        state = after as SolvingState;
       }
-      state = controller.onEffectFinished() as SolvingState;
     }
     expect(controller.totalCompleted, 5);
-    expect(state.optionCount, 3);
+    expect(after, isA<SetCompletedState>(),
+        reason: 'the 5th onEffectFinished should close the set');
+  });
+
+  test('onRest / onResume round-trip preserves the recent items', () {
+    final controller = GameController(
+      catalog: catalog,
+      factory: RoundFactory(random: Random(8)),
+    );
+    controller.start();
+    for (var i = 0; i < 4; i++) {
+      final solving = controller.current! as SolvingState;
+      controller.onChoice(solving.round.target.id);
+      controller.onEffectFinished();
+    }
+    final solving = controller.current! as SolvingState;
+    controller.onChoice(solving.round.target.id);
+    controller.onEffectFinished();
+    expect(controller.current, isA<SetCompletedState>());
+
+    final resting = controller.onRest();
+    expect(resting, isA<RestingState>());
+    final rest = resting as RestingState;
+    expect(rest.recentItems, hasLength(5));
+    expect(rest.totalCompletedToday, 5);
+
+    final back = controller.onResume();
+    expect(back, isA<SetCompletedState>());
+    expect((back as SetCompletedState).recentItems, hasLength(5));
+    expect(controller.totalCompleted, 5);
+  });
+
+  test('onRest rejects any state that is not SetCompletedState', () {
+    final controller = GameController(
+      catalog: catalog,
+      factory: RoundFactory(random: Random(9)),
+    );
+    controller.start();
+    expect(() => controller.onRest(), throwsStateError);
+  });
+
+  test('resumeFromTotalCompleted carries _totalCompleted into the new set',
+      () {
+    final controller = GameController(
+      catalog: catalog,
+      factory: RoundFactory(random: Random(10)),
+    );
+    controller.resumeFromTotalCompleted(7);
+    final solving = controller.current! as SolvingState;
+    expect(controller.totalCompleted, 7);
+    expect(solving.completedInSet, 0);
+    expect(solving.optionCount, 3,
+        reason: 'after 7 completions, the next set uses 3 options');
+    expect(controller.recentItems, isEmpty);
   });
 
   test('repeated recent targets are avoided', () {
@@ -141,13 +196,12 @@ void main() {
     final picks = <String>{};
     for (var i = 0; i < 5; i++) {
       picks.add(state.round.target.id);
-      GameState next = controller.onChoice(state.round.target.id);
-      if (next is SetCompletedState) break;
-      if (next is SolvedState) {
-        state = controller.onEffectFinished() as SolvingState;
-      } else {
-        state = next as SolvingState;
-      }
+      controller.onChoice(state.round.target.id);
+      // The 5th correct answer still goes through SolvedState +
+      // onEffectFinished, which then yields SetCompletedState.
+      final after = controller.onEffectFinished();
+      if (after is SetCompletedState) break;
+      state = after as SolvingState;
     }
     expect(picks.length, greaterThan(2));
   });

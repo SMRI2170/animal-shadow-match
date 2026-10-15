@@ -73,6 +73,20 @@ class SetCompletedState extends GameState {
   final int totalCompletedToday;
 }
 
+/// Idle "rest" screen reached from [SetCompletedState] when the child
+/// (or the caregiver) taps a Rest button. The recent items are still on
+/// screen for comfort, but a soft idle animation plays; [onResume] returns
+/// to [SetCompletedState] without changing progress counters.
+class RestingState extends GameState {
+  const RestingState({
+    required this.recentItems,
+    required this.totalCompletedToday,
+  });
+
+  final List<ShadowItem> recentItems;
+  final int totalCompletedToday;
+}
+
 /// Internal sentinel used by [SolvingState.copyWith] to distinguish "leave
 /// unchanged" from "set to null".
 const Object _sentinel = Object();

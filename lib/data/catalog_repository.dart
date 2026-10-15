@@ -7,6 +7,7 @@ import '../domain/animal.dart';
 import '../domain/shadow_item.dart';
 import 'catalog_load_result.dart';
 import 'catalog_source.dart';
+import 'catalog_theme.dart';
 
 /// Loads the playable catalog from the bundled JSON assets.
 ///
@@ -24,15 +25,26 @@ import 'catalog_source.dart';
 ///
 /// Legacy `animals.json` is still loaded as a regression baseline; entries
 /// from there are merged by id with the live catalog and shadow the
-/// legacy name onto the new [ShadowItem.accessibilityLabel].
+/// legacy name onto the new [ShadowItem.accessibilityLabel]. To stop
+/// mixing the v4 and v6 silhouettes, callers pick a [CatalogTheme].
 class CatalogRepository {
   /// Production constructor: uses [rootBundle] to resolve assets.
   /// Not `const` because the optional test bundle requires a heap object.
-  CatalogRepository() : _bundle = null;
+  CatalogRepository({CatalogTheme? theme})
+      : theme = theme ?? catalogThemeFromEnvironment(),
+        _bundle = null;
 
   /// Test override: pass a fake bundle that resolves every key in memory.
   @visibleForTesting
-  CatalogRepository.test(AssetBundle bundle) : _bundle = bundle;
+  CatalogRepository.test(
+    AssetBundle bundle, {
+    this.theme = CatalogTheme.v6Only,
+  }) : _bundle = bundle;
+
+  /// Restrict the catalog to a specific source (v6 / legacy / all). When
+  /// null in production, the value is read from the `CATALOG_THEME`
+  /// `--dart-define` flag; the default is [CatalogTheme.v6Only].
+  final CatalogTheme? theme;
 
   final AssetBundle? _bundle;
 
@@ -41,22 +53,29 @@ class CatalogRepository {
 
   Future<CatalogLoadResult> load() async {
     final resolver = _bundle ?? rootBundle;
+    final effectiveTheme = theme ?? catalogThemeFromEnvironment();
     final byId = <String, ShadowItem>{};
     final sources = <CatalogSource>{};
 
-    final legacy = await _tryLoad(resolver, 'assets/catalog/animals.json');
-    if (legacy != null) {
-      sources.add(CatalogSource.legacyAnimals);
-      for (final entry in legacy) {
-        byId[entry.id] = entry;
+    if (effectiveTheme == CatalogTheme.all ||
+        effectiveTheme == CatalogTheme.legacyOnly) {
+      final legacy = await _tryLoad(resolver, 'assets/catalog/animals.json');
+      if (legacy != null) {
+        sources.add(CatalogSource.legacyAnimals);
+        for (final entry in legacy) {
+          byId[entry.id] = entry;
+        }
       }
     }
 
-    final items = await _tryLoad(resolver, 'assets/catalog/items.json');
-    if (items != null) {
-      sources.add(CatalogSource.itemsV6);
-      for (final entry in items) {
-        byId[entry.id] = entry;
+    if (effectiveTheme == CatalogTheme.all ||
+        effectiveTheme == CatalogTheme.v6Only) {
+      final items = await _tryLoad(resolver, 'assets/catalog/items.json');
+      if (items != null) {
+        sources.add(CatalogSource.itemsV6);
+        for (final entry in items) {
+          byId[entry.id] = entry;
+        }
       }
     }
 

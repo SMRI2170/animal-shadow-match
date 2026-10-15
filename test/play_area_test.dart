@@ -46,4 +46,31 @@ void main() {
     await tester.pump();
     expect(find.byIcon(Icons.inbox_rounded), findsOneWidget);
   });
+
+  testWidgets('ReviewPlayArea shows a Rest button when onRest is provided',
+      (tester) async {
+    var continueCalls = 0;
+    var restCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ReviewPlayArea(
+          items: [
+            _item('gel_star'),
+            _item('cloud_cushion'),
+            _item('teardrop_gummy'),
+          ],
+          onContinue: () => continueCalls++,
+          onRest: () => restCalls++,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(find.text('Rest'), findsOneWidget);
+    expect(find.text('Continue'), findsOneWidget);
+
+    await tester.tap(find.text('Rest'));
+    await tester.pump();
+    expect(restCalls, 1);
+    expect(continueCalls, 0);
+  });
 }

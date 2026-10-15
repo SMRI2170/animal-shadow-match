@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:animal_shadow_match/data/catalog_load_result.dart';
 import 'package:animal_shadow_match/data/catalog_repository.dart';
 import 'package:animal_shadow_match/data/catalog_source.dart';
+import 'package:animal_shadow_match/data/catalog_theme.dart';
 import 'package:animal_shadow_match/domain/shadow_item.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -114,7 +115,7 @@ void main() {
     final bundle = _MemoryAssetBundle({
       'assets/catalog/animals.json': _legacyAnimalsJson(),
     });
-    final repo = CatalogRepository.test(bundle);
+    final repo = CatalogRepository.test(bundle, theme: CatalogTheme.legacyOnly);
     final result = await repo.load();
     expect(result.items, hasLength(4));
     expect(result.sources, equals({CatalogSource.legacyAnimals}));
@@ -132,7 +133,7 @@ void main() {
         'twist_gummy',
       ]),
     });
-    final repo = CatalogRepository.test(bundle);
+    final repo = CatalogRepository.test(bundle, theme: CatalogTheme.all);
     final result = await repo.load();
     expect(result.items.map((e) => e.id),
         containsAll(['gel_star', 'cloud_cushion', 'teardrop_gummy']));

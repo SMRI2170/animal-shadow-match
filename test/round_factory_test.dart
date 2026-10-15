@@ -50,4 +50,49 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test('falls back to the relaxed pool when the ban covers every category',
+      () {
+    // The legacy catalog only carries a single 'animal' category, so a
+    // ban on 'animal' would normally leave zero eligible items. The
+    // factory should still hand back a valid round.
+    final factory = RoundFactory(random: Random(4));
+    for (var i = 0; i < 50; i++) {
+      final round = factory.create(
+        catalog: catalog,
+        optionCount: 3,
+        bannedCategories: const {'animal'},
+      );
+      expect(round.options.length, 3);
+      expect(round.options.map((a) => a.id).toSet().length, 3,
+          reason: 'must not duplicate options when relaxing bans');
+      expect(round.options.where((a) => a.id == round.target.id).length, 1);
+    }
+  });
+
+  test('always returns optionCount options when a small catalog is heavily banned',
+      () {
+    // Six items, three categories. Banning two of the three leaves two
+    // items in the respecting pool, so the factory must reach into the
+    // "different category" / "any other" ladders to fill optionCount=3.
+    final multiCategory = <Animal>[
+      animal('a_jelly_1', distractors: ['a_jelly_2']),
+      animal('a_jelly_2'),
+      animal('b_toy_1', distractors: ['b_toy_2']),
+      animal('b_toy_2'),
+      animal('c_cosmic_1', distractors: ['c_cosmic_2']),
+      animal('c_cosmic_2'),
+    ];
+    final factory = RoundFactory(random: Random(5));
+    for (var i = 0; i < 50; i++) {
+      final round = factory.create(
+        catalog: multiCategory,
+        optionCount: 3,
+        bannedCategories: const {'jelly', 'toy'},
+      );
+      expect(round.options.length, 3);
+      expect(round.options.map((a) => a.id).toSet().length, 3);
+      expect(round.options.where((a) => a.id == round.target.id).length, 1);
+    }
+  });
 }

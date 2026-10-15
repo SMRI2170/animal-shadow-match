@@ -46,15 +46,15 @@ class GameController {
       }
       _completedInSet += 1;
       _totalCompleted += 1;
-      final completed = _completedInSet;
-      final reachedEnd = completed >= _setSize;
-      final next = reachedEnd
-          ? _buildSetCompleted()
-          : SolvedState(
-              round: round,
-              completedInSet: completed,
-              optionCount: _optionCount,
-            );
+      // Always return SolvedState so the round's FX plays, even on the
+      // final answer. SetCompletedState is reached via onEffectFinished
+      // below, which keeps the v6 spec's "every correct answer plays the
+      // FX" promise (Issue #86 review).
+      final next = SolvedState(
+        round: round,
+        completedInSet: _completedInSet,
+        optionCount: _optionCount,
+      );
       current = next;
       return next;
     }
@@ -65,11 +65,14 @@ class GameController {
 
   GameState onEffectFinished() {
     _expectSolved();
-    final next = SolvingState(
-      round: _freshRound(),
-      completedInSet: _completedInSet,
-      optionCount: _optionCount,
-    );
+    final reachedEnd = _completedInSet >= _setSize;
+    final next = reachedEnd
+        ? _buildSetCompleted()
+        : SolvingState(
+            round: _freshRound(),
+            completedInSet: _completedInSet,
+            optionCount: _optionCount,
+          );
     current = next;
     return next;
   }
@@ -84,6 +87,55 @@ class GameController {
     );
     current = next;
     return next;
+  }
+
+  /// Switch from [SetCompletedState] to [RestingState]. Progress counters
+  /// are preserved; the child can resume to the same review area without
+  /// losing track of which set they just finished.
+  GameState onRest() {
+    final state = current;
+    if (state is! SetCompletedState) {
+      throw StateError('expected SetCompletedState, got $state');
+    }
+    final next = RestingState(
+      recentItems: List.unmodifiable(_recentItems),
+      totalCompletedToday: _totalCompleted,
+    );
+    current = next;
+    return next;
+  }
+
+  /// Return from [RestingState] to [SetCompletedState] without touching
+  /// progress. The review area re-renders with the same items so the
+  /// child can decide between Continue and another rest.
+  GameState onResume() {
+    final state = current;
+    if (state is! RestingState) {
+      throw StateError('expected RestingState, got $state');
+    }
+    final next = _buildSetCompleted();
+    current = next;
+    return next;
+  }
+
+  /// Restore the controller from a persisted `totalCompleted` counter
+  /// (Issue #22 resume / #25 review). The current [GameState] is left in
+  /// [current] as a fresh [SolvingState] so the child sees new options
+  /// instead of replaying the round that was interrupted.
+  ///
+  /// Accepting an `int` rather than a `GameProgress` keeps the domain
+  /// layer free of persistence concerns; callers translate the persisted
+  /// record into the counter and pass it in.
+  void resumeFromTotalCompleted(int totalCompleted) {
+    _totalCompleted = totalCompleted;
+    _completedInSet = 0;
+    _lastTarget = null;
+    _recentItems.clear();
+    current = SolvingState(
+      round: _freshRound(),
+      completedInSet: 0,
+      optionCount: _optionCount,
+    );
   }
 
   /// Public for tests: lets the caller peek at "what was the last target?"

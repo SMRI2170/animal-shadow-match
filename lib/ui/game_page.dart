@@ -12,6 +12,7 @@ import '../domain/round_factory.dart';
 import '../domain/shadow_item.dart';
 import 'hand_guide.dart';
 import 'play_area.dart';
+import 'resting_screen.dart';
 import 'single_asset_effect.dart';
 
 /// Top-level game screen. Wires [CatalogRepository] -> [GameController] ->
@@ -92,6 +93,7 @@ class _PlayBoardState extends State<_PlayBoard> {
   String? _wrongChoice;
   Timer? _wrongResetTimer;
   bool _showHandGuide = true;
+  bool _resumed = false;
 
   @override
   void initState() {
@@ -101,12 +103,29 @@ class _PlayBoardState extends State<_PlayBoard> {
       factory: widget.factory,
     );
     _state = _controller.start();
+    // Attempt to restore from persisted progress (Issue #22 / #25). The
+    // store is read once on the first frame; we clear the saved progress
+    // afterwards so the next cold start begins a fresh set unless the
+    // player explicitly returns mid-set.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeResume());
   }
 
   @override
   void dispose() {
     _wrongResetTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _maybeResume() async {
+    if (_resumed || !mounted) return;
+    _resumed = true;
+    final saved = await widget.progressStore.load();
+    if (!mounted || saved == null) return;
+    if (saved.totalCompleted <= 0) return;
+    setState(() {
+      _controller.resumeFromTotalCompleted(saved.totalCompleted);
+      _state = _controller.current;
+    });
   }
 
   void _onChoice(ShadowItem item) {
@@ -148,6 +167,18 @@ class _PlayBoardState extends State<_PlayBoard> {
     _persistProgress();
   }
 
+  void _onRestFromSet() {
+    final current = _state;
+    if (current is! SetCompletedState) return;
+    setState(() => _state = _controller.onRest());
+  }
+
+  void _onResumeFromRest() {
+    final current = _state;
+    if (current is! RestingState) return;
+    setState(() => _state = _controller.onResume());
+  }
+
   Future<void> _persistProgress() async {
     final totalCompleted = _controller.totalCompleted;
     final recent =
@@ -167,6 +198,7 @@ class _PlayBoardState extends State<_PlayBoard> {
     if (state is SolvingState) return _buildSolving(state);
     if (state is SolvedState) return _buildSolved(state);
     if (state is SetCompletedState) return _buildSetCompleted(state);
+    if (state is RestingState) return _buildResting(state);
     return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 
@@ -309,6 +341,14 @@ class _PlayBoardState extends State<_PlayBoard> {
     return ReviewPlayArea(
       items: state.recentItems,
       onContinue: _onContinueFromSet,
+      onRest: _onRestFromSet,
+    );
+  }
+
+  Widget _buildResting(RestingState state) {
+    return RestingScreen(
+      items: state.recentItems,
+      onResume: _onResumeFromRest,
     );
   }
 }
