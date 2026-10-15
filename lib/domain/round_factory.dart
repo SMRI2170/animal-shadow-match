@@ -14,9 +14,9 @@ class ShadowRound {
 /// Generates rounds locally. The listed distractors are hand-curated, with a
 /// catalog-wide fallback; the final options are shuffled on every round.
 ///
-/// Works on the generic [ShadowItem] so animal/object/character catalogs all
-/// use the same round logic. The legacy `Animal` type is now a subclass of
-/// [ShadowItem], so this keeps working without changes for the demo data.
+/// Recent-target avoidance and category diversity are knobs that callers
+/// can pass through `previousTargetIds` / `bannedCategories` to keep
+/// multi-round sessions from getting boring (v6 §4).
 class RoundFactory {
   RoundFactory({Random? random}) : _random = random ?? Random();
 
@@ -26,14 +26,23 @@ class RoundFactory {
     required List<ShadowItem> catalog,
     required int optionCount,
     String? previousTargetId,
+    List<String> previousTargetIds = const <String>[],
+    Set<String> bannedCategories = const <String>{},
   }) {
     if (optionCount < 2 || catalog.length < optionCount) {
       throw ArgumentError(
         'RoundFactory needs at least $optionCount distinct items in the catalog',
       );
     }
-    final eligible =
-        catalog.where((item) => item.id != previousTargetId).toList();
+    final alreadyUsed = <String>{
+      if (previousTargetId != null) previousTargetId,
+      ...previousTargetIds,
+    };
+    final eligible = catalog
+        .where((item) =>
+            !alreadyUsed.contains(item.id) &&
+            !bannedCategories.contains(item.category))
+        .toList();
     final targetPool = eligible.isNotEmpty ? eligible : catalog;
     final target = targetPool[_random.nextInt(targetPool.length)];
     final byId = {for (final item in catalog) item.id: item};
@@ -41,12 +50,17 @@ class RoundFactory {
     final preferred = <ShadowItem>[];
     for (final id in target.distractorIds) {
       final item = byId[id];
-      if (item != null && item.id != target.id) preferred.add(item);
+      if (item != null &&
+          item.id != target.id &&
+          !bannedCategories.contains(item.category)) {
+        preferred.add(item);
+      }
     }
     preferred.shuffle(_random);
     final fallback = catalog
         .where((item) =>
             item.id != target.id &&
+            !bannedCategories.contains(item.category) &&
             !preferred.any((preferredAnimal) => preferredAnimal.id == item.id))
         .toList()
       ..shuffle(_random);
