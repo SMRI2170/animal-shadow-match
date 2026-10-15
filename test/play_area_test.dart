@@ -76,4 +76,32 @@ void main() {
     expect(restCalls, 1);
     expect(continueCalls, 0);
   });
+
+  testWidgets('ReviewPlayArea fits a 360x640dp viewport without overflow',
+      (tester) async {
+    // 5 tiles on a 360x640dp phone. The Wrap should fold them onto
+    // multiple lines without throwing a RenderFlex overflow.
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ReviewPlayArea(
+          items: [
+            _item('gel_star'),
+            _item('cloud_cushion'),
+            _item('teardrop_gummy'),
+            _item('twist_gummy'),
+            _item('soft_planet'),
+          ],
+          onContinue: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(tester.takeException(), isNull);
+    expect(find.byType(ReviewPlayArea), findsOneWidget);
+    // The 5 review tiles are present.
+    expect(find.byIcon(Icons.bedtime_rounded), findsNothing,
+        reason: 'onRest was not provided, so the Rest icon is absent');
+  });
 }

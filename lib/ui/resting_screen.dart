@@ -21,7 +21,10 @@ class RestingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Resting'),
+        // No text title: the resting screen's whole point is a calm,
+        // language-free space (Issue #21 follow-up). The Resume action
+        // on the right + the full-area tap are the only affordances.
+        title: const SizedBox.shrink(),
         backgroundColor: const Color(0xFFFFF9F0),
         elevation: 0,
         actions: [

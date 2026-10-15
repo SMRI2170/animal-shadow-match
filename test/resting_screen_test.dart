@@ -42,6 +42,25 @@ void main() {
     expect(find.byTooltip('Resume'), findsOneWidget);
     expect(find.byIcon(Icons.replay_rounded), findsOneWidget);
     expect(find.byType(Image), findsNWidgets(items.length));
+    // Issue #21 follow-up: the AppBar must NOT carry a text title.
+    expect(find.text('Resting'), findsNothing);
+  });
+
+  testWidgets('RestingScreen fits a 360x640dp viewport without overflow',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RestingScreen(items: items, onResume: () {}),
+      ),
+    );
+    await tester.pump();
+    // No exception is the success signal. The tile wrap should fold the
+    // 5 items onto multiple lines without overflowing the AppBar or the
+    // safe area.
+    expect(tester.takeException(), isNull);
+    expect(find.byType(RestingScreen), findsOneWidget);
   });
 
   testWidgets('Tapping the Resume icon button calls onResume',
