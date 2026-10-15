@@ -209,9 +209,9 @@ void main() {
   });
 
   test('CatalogLoadResult.hasPlaceholders reflects the source set', () {
-    final none = CatalogLoadResult(
-      items: const <ShadowItem>[],
-      sources: const <CatalogSource>{},
+    const none = CatalogLoadResult(
+      items: <ShadowItem>[],
+      sources: <CatalogSource>{},
     );
     expect(none.hasPlaceholders, isFalse);
     expect(none.hasLiveItems, isFalse);
