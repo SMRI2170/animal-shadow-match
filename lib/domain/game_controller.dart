@@ -21,7 +21,15 @@ class GameController {
   final int _setSize;
 
   ShadowItem? _lastTarget;
-  final List<ShadowItem> _recentItems = [];
+  // Targets used *within the current set* (Issue #20 acceptance reset).
+  // Cleared on onContinue so the new set's first round can pick from
+  // the entire catalog.
+  final List<ShadowItem> _usedInSet = [];
+  // Targets we must avoid across set boundaries. We only need the
+  // single most-recent target so a tiny 5-item catalog does not run
+  // out of distractors on the second set's 5th question (Issue #20
+  // mini-followup: "5 items, 3 sets, 15 questions" regression test).
+  ShadowItem? _lastTargetAcrossSets;
   int _completedInSet = 0;
   int _totalCompleted = 0;
 
@@ -40,9 +48,10 @@ class GameController {
     final round = solving.round;
     if (round.isCorrect(chosenId)) {
       _lastTarget = round.target;
-      _recentItems.add(round.target);
-      if (_recentItems.length > _setSize) {
-        _recentItems.removeAt(0);
+      _lastTargetAcrossSets = round.target;
+      _usedInSet.add(round.target);
+      if (_usedInSet.length > _setSize) {
+        _usedInSet.removeAt(0);
       }
       _completedInSet += 1;
       _totalCompleted += 1;
@@ -78,16 +87,17 @@ class GameController {
   }
 
   GameState onContinue() {
-    // Begin the next set of questions. Drop the set's recent-target
-    // history but keep the very last target so the new set's first
-    // round avoids an immediate repeat. Without this, a 5-question set
-    // on a 6-item catalog would block the distractor pool in the next
-    // set (Issue #3 acceptance).
+    // Begin the next set of questions.
+    //
+    // Issue #20 follow-up: the in-set history resets so the new set
+    // can pick from the entire catalog. The single most-recent target
+    // is *not* part of the in-set history; it is kept in
+    // _lastTargetAcrossSets and passed to _freshRound via the
+    // `previousTargetId` argument so only the new set's first round
+    // has to avoid it. This keeps a 5-item catalog playable for
+    // multiple sets in a row.
     _completedInSet = 0;
-    final last = _recentItems.isNotEmpty ? _recentItems.last : null;
-    _recentItems
-      ..clear()
-      ..addAll(last != null ? [last] : const <ShadowItem>[]);
+    _usedInSet.clear();
     final next = SolvingState(
       round: _freshRound(),
       completedInSet: 0,
@@ -106,7 +116,7 @@ class GameController {
       throw StateError('expected SetCompletedState, got $state');
     }
     final next = RestingState(
-      recentItems: List.unmodifiable(_recentItems),
+      recentItems: List.unmodifiable(_usedInSet),
       totalCompletedToday: _totalCompleted,
     );
     current = next;
@@ -138,7 +148,8 @@ class GameController {
     _totalCompleted = totalCompleted;
     _completedInSet = 0;
     _lastTarget = null;
-    _recentItems.clear();
+    _lastTargetAcrossSets = null;
+    _usedInSet.clear();
     current = SolvingState(
       round: _freshRound(),
       completedInSet: 0,
@@ -149,18 +160,25 @@ class GameController {
   /// Public for tests: lets the caller peek at "what was the last target?"
   /// without exposing mutable state.
   ShadowItem? get lastTarget => _lastTarget;
+  ShadowItem? get lastTargetAcrossSets => _lastTargetAcrossSets;
   int get completedInSet => _completedInSet;
   int get totalCompleted => _totalCompleted;
-  List<ShadowItem> get recentItems => List.unmodifiable(_recentItems);
+  /// In-set history: cleared on `onContinue`, capped at `_setSize`.
+  /// Use this to inspect "what did the child just play through this set?"
+  List<ShadowItem> get recentItems => List.unmodifiable(_usedInSet);
 
   ShadowRound _freshRound() {
-    final previousIds = _recentItems.map((e) => e.id).toList();
+    // In-set history feeds the in-set `previousTargetIds` so the next
+    // round within the same set avoids repeats. The single
+    // across-sets target is passed via `previousTargetId` so only the
+    // first round of a new set has to dodge it.
+    final previousIds = _usedInSet.map((e) => e.id).toList();
     // After 80% of the catalog from one category has appeared, ban that
     // category for a round to keep silhouettes varied.
     final banned = <String>{};
-    if (_recentItems.length >= 2 && catalog.length >= 6) {
+    if (_usedInSet.length >= 2 && catalog.length >= 6) {
       final byCategory = <String, int>{};
-      for (final item in _recentItems) {
+      for (final item in _usedInSet) {
         byCategory[item.category] = (byCategory[item.category] ?? 0) + 1;
       }
       final top = byCategory.entries
@@ -171,6 +189,7 @@ class GameController {
     return factory.create(
       catalog: catalog,
       optionCount: _optionCount,
+      previousTargetId: _lastTargetAcrossSets?.id,
       previousTargetIds: previousIds,
       bannedCategories: banned,
     );
@@ -199,7 +218,7 @@ class GameController {
 
   SetCompletedState _buildSetCompleted() {
     return SetCompletedState(
-      recentItems: List.unmodifiable(_recentItems),
+      recentItems: List.unmodifiable(_usedInSet),
       totalCompletedToday: _totalCompleted,
     );
   }

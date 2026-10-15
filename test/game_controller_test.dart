@@ -370,4 +370,131 @@ void main() {
       );
     });
   });
+
+  group(
+      'Issue #20 follow-up: 5-item catalog plays multiple sets in a row',
+      () {
+    // Five items is the smallest catalog that satisfies the playability
+    // gate. The pre-fix controller kept the previous set's full
+    // _recentItems history around, so the second set's 5th round had
+    // no eligible target and StateError'd. The fix splits in-set
+    // history (cleared on onContinue) from the across-sets last target
+    // (passed via previousTargetId).
+    final five = <ShadowItem>[
+      _item('a', category: 'x'),
+      _item('b', category: 'x'),
+      _item('c', category: 'x'),
+      _item('d', category: 'x'),
+      _item('e', category: 'x'),
+    ];
+
+    test('5 items, 3 sets, 15 questions in a row (correct-only path)', () {
+      final controller = GameController(
+        catalog: five,
+        factory: RoundFactory(random: Random(50)),
+        setSize: 5,
+      );
+      controller.start();
+      final allTargets = <String>[];
+      for (var set = 0; set < 3; set++) {
+        final ids = <String>{};
+        for (var i = 0; i < 5; i++) {
+          final solving = controller.current! as SolvingState;
+          ids.add(solving.round.target.id);
+          allTargets.add(solving.round.target.id);
+          controller.onChoice(solving.round.target.id);
+          controller.onEffectFinished();
+        }
+        expect(
+          ids,
+          hasLength(5),
+          reason: 'set $set must contain 5 unique targets',
+        );
+        expect(controller.current, isA<SetCompletedState>(),
+            reason: 'set $set must reach SetCompletedState');
+        controller.onContinue();
+      }
+      expect(controller.totalCompleted, 15);
+      // Across all 15 questions the same id should appear at most
+      // 3 times (once per set) since onContinue clears the in-set
+      // history. The across-sets last target carries over, so each
+      // set's first question must avoid the previous set's last
+      // target — that's still consistent with 3x repetition of a
+      // single id across 3 sets.
+      final counts = <String, int>{};
+      for (final id in allTargets) {
+        counts[id] = (counts[id] ?? 0) + 1;
+      }
+      for (final entry in counts.entries) {
+        expect(
+          entry.value,
+          lessThanOrEqualTo(3),
+          reason:
+              'id ${entry.key} appeared ${entry.value} times in 15 questions',
+        );
+      }
+    });
+
+    test('set 2 first-round avoids the previous set\'s last target', () {
+      // Regression: the in-set history is cleared on onContinue, but
+      // the across-sets last target must still dodge the previous
+      // set's last target (just on the first round of the new set).
+      final controller = GameController(
+        catalog: five,
+        factory: RoundFactory(random: Random(51)),
+        setSize: 5,
+      );
+      controller.start();
+      for (var i = 0; i < 5; i++) {
+        final solving = controller.current! as SolvingState;
+        controller.onChoice(solving.round.target.id);
+        controller.onEffectFinished();
+      }
+      final lastOfSet1 =
+          (controller.current! as SetCompletedState).recentItems.last.id;
+      controller.onContinue();
+      // Set 2's first round must NOT target lastOfSet1.
+      final firstOfSet2 =
+          (controller.current! as SolvingState).round.target.id;
+      expect(firstOfSet2, isNot(lastOfSet1),
+          reason: 'set 2 first round must avoid set 1 last target');
+    });
+
+    test('a wrong answer does not break the 5-item multi-set run', () {
+      // Mix in some wrong answers to make sure the recovery path
+      // does not poison _lastTargetAcrossSets.
+      final controller = GameController(
+        catalog: five,
+        factory: RoundFactory(random: Random(52)),
+        setSize: 5,
+      );
+      controller.start();
+      // 5 correct answers in set 1.
+      for (var i = 0; i < 5; i++) {
+        final solving = controller.current! as SolvingState;
+        controller.onChoice(solving.round.target.id);
+        controller.onEffectFinished();
+      }
+      controller.onContinue();
+      // Set 2, round 1: 3 wrong taps, then the correct one.
+      var solving = controller.current! as SolvingState;
+      for (var i = 0; i < 3; i++) {
+        final wrong = solving.round.options
+            .firstWhere((o) => o.id != solving.round.target.id);
+        controller.onChoice(wrong.id);
+        solving = controller.current! as SolvingState;
+      }
+      controller.onChoice(solving.round.target.id);
+      controller.onEffectFinished();
+      // Finish set 2 with 4 more correct.
+      for (var i = 0; i < 4; i++) {
+        final s = controller.current! as SolvingState;
+        controller.onChoice(s.round.target.id);
+        controller.onEffectFinished();
+      }
+      expect(controller.current, isA<SetCompletedState>(),
+          reason: 'set 2 with 3 wrong taps + 5 correct must still close');
+      expect(controller.totalCompleted, 10);
+    });
+  });
 }
