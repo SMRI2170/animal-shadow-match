@@ -24,6 +24,7 @@ class ShadowItem {
     this.effectPreset = EffectPreset.squish,
     this.effectIntensity = EffectIntensity.gentle,
     this.accessibilityLabel,
+    this.similarityGroup,
   });
 
   /// Stable, lowercase identifier used in JSON and as the question key.
@@ -46,6 +47,17 @@ class ShadowItem {
   /// The runtime falls back to other catalog entries to keep option counts
   /// configurable from 2..4.
   final List<String> distractorIds;
+
+  /// Optional silhouette-similarity bucket shared with other items. Items
+  /// in the same group are **never** both picked for the same round: when
+  /// one of them is the target, no other member can appear as a distractor.
+  ///
+  /// This is a soft contract from [RoundFactory] (Issue #89 follow-up);
+  /// it prevents visually similar items — e.g. `stacked_disks` vs.
+  /// `wavy_disc` — from being the only way to tell the question apart.
+  /// Keep the value machine-readable (lowercase + underscores, like an id)
+  /// so it can be referenced by tests and pipelines.
+  final String? similarityGroup;
 
   /// Coarse silhouette hints for humans — not used at runtime, but kept in
   /// the JSON so reviewers can decide whether two items will look alike.
@@ -73,6 +85,7 @@ class ShadowItem {
       effectPreset: EffectPreset.parse(json['effectPreset']),
       effectIntensity: EffectIntensity.parse(json['effectIntensity']),
       accessibilityLabel: json['accessibilityLabel'] as String?,
+      similarityGroup: json['similarityGroup'] as String?,
     );
   }
 
@@ -96,6 +109,7 @@ class ShadowItem {
       effectPreset: effectPreset,
       effectIntensity: effectIntensity,
       accessibilityLabel: accessibilityLabel ?? this.accessibilityLabel,
+      similarityGroup: similarityGroup,
     );
   }
 }

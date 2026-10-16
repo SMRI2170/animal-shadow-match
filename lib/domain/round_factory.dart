@@ -76,13 +76,44 @@ class RoundFactory {
       bannedCategories: bannedCategories,
     );
 
+    // Every item that shares `target.similarityGroup` is banned as a
+    // distractor (Issue #89 follow-up). This is a hard contract: if the
+    // catalog's same-group population makes it impossible to fill
+    // `optionCount - 1` distinct distractors, [create] surfaces a
+    // [StateError] rather than silently falling back to a confusing round.
+    final similarityBanned = <String>{
+      for (final item in catalog)
+        if (item.similarityGroup != null &&
+            item.similarityGroup == target.similarityGroup)
+          item.id,
+    };
+    // The target id stays inside `similarityBanned` (its own group), but
+    // the target id check below short-circuits before the ban applies, so
+    // we don't need to special-case it.
+
     // 2. Pick (optionCount - 1) distractors in a strict priority order so
     //    the player always sees the target plus a full row of options.
     final distractors = <ShadowItem>[];
+    final presentGroups = <String>{};
     void consider(ShadowItem candidate) {
       if (candidate.id == target.id) return;
+      if (similarityBanned.contains(candidate.id)) return;
       if (distractors.any((d) => d.id == candidate.id)) return;
+      // Distractor-vs-distractor exclusion: once a similarityGroup is
+      // represented in the distractor list, no second candidate from the
+      // same group can be added. This prevents "stacked_disks" and
+      // "wavy_disc" from appearing side-by-side as wrong answers, which
+      // would reduce a 4-option question to a 2-option question visually
+      // (Issue #89 follow-up, part two). Null-group items are exempt —
+      // they have no silhouette-similarity contract.
+      if (candidate.similarityGroup != null &&
+          presentGroups.contains(candidate.similarityGroup)) {
+        return;
+      }
       distractors.add(candidate);
+      if (candidate.similarityGroup != null) {
+        presentGroups.add(candidate.similarityGroup!);
+      }
     }
 
     // 2a. Hand-curated distractor ids from the target item itself.
