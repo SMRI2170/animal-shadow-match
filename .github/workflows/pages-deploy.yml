@@ -1,0 +1,130 @@
+name: Pages deploy
+
+# Deploys the development-theme Flutter web build to the repository's
+# `gh-pages` branch (which already exists on origin).
+#
+# Why a dedicated workflow:
+# * CI in `.github/workflows/ci.yml` runs on every PR; a Pages build is
+#   expensive (Flutter web compilation + Dart-define evaluation) and
+#   is best limited to main + manual triggers.
+# * The web bundle is large; publishing it once per main commit keeps
+#   gh-pages steady.
+# * The two image-pipeline workflows (`promote-minimax-assets.yml`,
+#   `minimax-images.yml`) cover different concerns; Pages only needs
+#   the assembled `build/web`.
+#
+# Trigger:
+# * push to main (after the Squash & merge of an integration PR).
+# * workflow_dispatch for an ad-hoc republish by the owner.
+#
+# Output:
+# * `gh-pages` branch receives a fresh commit whose tree == `build/web`
+#   plus a `.nojekyll` marker and a `404.html` SPA fallback that
+#   mirrors `index.html`. The existing history on gh-pages is
+#   discarded via `--force-with-lease`; that's intentional because
+#   the production preview is always the newest green main commit.
+#
+# Owner prereqs (one-time, manual, *not* in this workflow):
+# 1. Confirm `gh-pages` already exists on origin (this repo does).
+# 2. The first push here writes a new commit on top of whatever
+#    content gh-pages holds. To wipe stale content use
+#    `--force-with-lease` (the default here).
+#
+# Pinned pitfalls from Issue #92 review (fixed in this revision):
+# * `env: GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}` is explicit, so
+#   `set -u` does not bail in the push step.
+# * `--base-href=/animal-shadow-match/` matches the GitHub Pages
+#   project-page URL so assets load from the right relative path.
+# * No `git checkout --orphan` step -- the branch already exists.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      # `secrets.GITHUB_TOKEN` is automatically provisioned by
+      # GitHub Actions for every job; we forward it to the script
+      # so the push step doesn't trip `set -u` when referencing
+      # the unset variable.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_PAGES_BRANCH: gh-pages
+      BASE_HREF: /animal-shadow-match/
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build Flutter web (development theme)
+        # The site showcases the procedural development catalog so
+        # reviewers can play without the v6 approved-image set.
+        # Switching to the approved v6 catalog is a matter of swapping
+        # these --dart-define values once items.json is populated by
+        # `promote-minimax-assets.yml` (see owners for that switch).
+        run: |
+          flutter config --enable-web
+          flutter pub get
+          flutter build web --release \
+            --base-href="${BASE_HREF}" \
+            --dart-define=CATALOG_THEME=development \
+            --dart-define=ENABLE_DEVELOPMENT_ASSETS=true
+
+      - name: Upload web bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web-development
+          path: build/web
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish to gh-pages
+        run: |
+          set -euo pipefail
+          : "${GITHUB_TOKEN:?GITHUB_TOKEN must be set}"
+          : "${GH_REPOSITORY:=${GITHUB_REPOSITORY}}"
+          mkdir -p /tmp/ghpages
+          pushd /tmp/ghpages >/dev/null
+          git init -q
+          git remote add origin \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GH_REPOSITORY}.git"
+          git fetch --depth=1 origin "$GH_PAGES_BRANCH"
+          # Reuse the existing branch if it is already there; create an
+          # orphan branch only if origin is missing it. Either path
+          # produces a working tree we can replace with build/web.
+          if git show-ref --verify --quiet "refs/remotes/origin/$GH_PAGES_BRANCH"; then
+            git checkout -q -B "$GH_PAGES_BRANCH" "origin/$GH_PAGES_BRANCH"
+          else
+            echo "::error::$GH_PAGES_BRANCH does not exist on origin. Create"
+                "it once with:"
+                "  git checkout --orphan $GH_PAGES_BRANCH"
+                "  git commit --allow-empty -m 'init'"
+                "  git push origin $GH_PAGES_BRANCH"
+            exit 1
+          fi
+          git rm -r --quiet . || true
+          cp -r "${GITHUB_WORKSPACE}/build/web/." .
+          touch .nojekyll
+          # SPA fallback so client-side routes resolve to the shell.
+          cp index.html 404.html
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git -c advice.detachedHead=false commit -q \
+            -m "Deploy development-theme Flutter web to Pages (${GITHUB_SHA::7})"
+          git push --force-with-lease origin "$GH_PAGES_BRANCH"
+          popd >/dev/null

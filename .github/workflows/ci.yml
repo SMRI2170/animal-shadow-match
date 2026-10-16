@@ -21,6 +21,36 @@ jobs:
       - run: flutter analyze
       - run: flutter test
 
+  flutter-web-smoke:
+    # Catches a missing `web/` skeleton, a flutter version that
+    # dropped web support, and a Pages-deploy breakage before either
+    # PR lands on main. PR-only; deploy workflow does its own build.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter config --enable-web
+      - run: flutter pub get
+      - name: Build web (development theme, --base-href mirror)
+        # Match the deploy workflow's flags so this smoke test
+        # actually exercises what production renders.
+        run: |
+          flutter build web --release \
+            --base-href=/animal-shadow-match/ \
+            --dart-define=CATALOG_THEME=development \
+            --dart-define=ENABLE_DEVELOPMENT_ASSETS=true
+      - name: Verify bundle has the expected entry points
+        run: |
+          test -f build/web/index.html
+          test -f build/web/main.dart.js
+          test -f build/web/flutter.js
+          test -f build/web/flutter_bootstrap.js
+          test -f build/web/assets/AssetManifest.bin
+          test -f build/web/assets/FontManifest.json
+
   assets:
     runs-on: ubuntu-24.04
     steps:
