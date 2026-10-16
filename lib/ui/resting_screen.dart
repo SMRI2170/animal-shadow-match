@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/shadow_item.dart';
+import 'image_provider_builder.dart';
 
 /// Idle "rest" screen shown after the child taps Rest on
 /// [ReviewPlayArea]. Lays out the recent [ShadowItem]s in a calm
@@ -14,6 +15,7 @@ class RestingScreen extends StatelessWidget {
     this.onResume,
     this.imageBundle,
     this.imageProvider,
+    this.imageProviderBuilder,
   });
 
   final List<ShadowItem> items;
@@ -29,6 +31,12 @@ class RestingScreen extends StatelessWidget {
   /// takes precedence over [imageBundle]; widget tests pass a
   /// [MemoryImage] here to bypass the asset bundle entirely.
   final ImageProvider? imageProvider;
+
+  /// Optional path -> [ImageProvider] resolver consulted by each
+  /// resting tile when [imageProvider] is null. Forwarded from
+  /// [GamePage] so a single builder can drive every image in the app
+  /// without falling back to `rootBundle.load('AssetManifest.bin')`.
+  final ImageProviderBuilder? imageProviderBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +73,7 @@ class RestingScreen extends StatelessWidget {
                         item: item,
                         bundle: imageBundle,
                         imageProvider: imageProvider,
+                        imageProviderBuilder: imageProviderBuilder,
                       ),
                     ],
                   ),
@@ -76,11 +85,17 @@ class RestingScreen extends StatelessWidget {
 }
 
 class _RestingTile extends StatefulWidget {
-  const _RestingTile({required this.item, this.bundle, this.imageProvider});
+  const _RestingTile({
+    required this.item,
+    this.bundle,
+    this.imageProvider,
+    this.imageProviderBuilder,
+  });
 
   final ShadowItem item;
   final AssetBundle? bundle;
   final ImageProvider? imageProvider;
+  final ImageProviderBuilder? imageProviderBuilder;
 
   @override
   State<_RestingTile> createState() => _RestingTileState();
@@ -97,6 +112,19 @@ class _RestingTileState extends State<_RestingTile>
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Widget _buildTileImage() {
+    final provider = widget.imageProvider ??
+        widget.imageProviderBuilder?.call(widget.item.imagePath);
+    if (provider != null) {
+      return Image(image: provider, fit: BoxFit.contain);
+    }
+    return Image.asset(
+      widget.item.imagePath,
+      fit: BoxFit.contain,
+      bundle: widget.bundle,
+    );
   }
 
   @override
@@ -117,16 +145,7 @@ class _RestingTileState extends State<_RestingTile>
             padding: const EdgeInsets.all(8),
             child: Opacity(
               opacity: 0.75,
-              child: widget.imageProvider != null
-                  ? Image(
-                      image: widget.imageProvider!,
-                      fit: BoxFit.contain,
-                    )
-                  : Image.asset(
-                      widget.item.imagePath,
-                      fit: BoxFit.contain,
-                      bundle: widget.bundle,
-                    ),
+              child: _buildTileImage(),
             ),
           ),
         );

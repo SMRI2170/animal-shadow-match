@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/shadow_item.dart';
+import 'image_provider_builder.dart';
 import 'single_asset_effect.dart';
 
 /// Review play area for #25.
@@ -20,6 +21,7 @@ class ReviewPlayArea extends StatelessWidget {
     this.onRest,
     this.imageBundle,
     this.imageProvider,
+    this.imageProviderBuilder,
   });
 
   final List<ShadowItem> items;
@@ -37,6 +39,12 @@ class ReviewPlayArea extends StatelessWidget {
   /// Widget tests inject a [MemoryImage] here to bypass the asset
   /// manifest entirely.
   final ImageProvider? imageProvider;
+
+  /// Optional path -> [ImageProvider] resolver consulted by each
+  /// review tile's [SingleAssetEffect]. Forwarded from [GamePage]
+  /// so a single builder can drive every image in the app without
+  /// falling back to `rootBundle.load('AssetManifest.bin')`.
+  final ImageProviderBuilder? imageProviderBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -77,6 +85,7 @@ class ReviewPlayArea extends StatelessWidget {
                         item: item,
                         imageBundle: imageBundle,
                         imageProvider: imageProvider,
+                        imageProviderBuilder: imageProviderBuilder,
                       ),
                   ],
                 ),
@@ -91,11 +100,13 @@ class _ReviewTile extends StatefulWidget {
     required this.item,
     this.imageBundle,
     this.imageProvider,
+    this.imageProviderBuilder,
   });
 
   final ShadowItem item;
   final AssetBundle? imageBundle;
   final ImageProvider? imageProvider;
+  final ImageProviderBuilder? imageProviderBuilder;
 
   @override
   State<_ReviewTile> createState() => _ReviewTileState();
@@ -127,6 +138,7 @@ class _ReviewTileState extends State<_ReviewTile> {
           assetPath: widget.item.imagePath,
           imageBundle: widget.imageBundle,
           imageProvider: widget.imageProvider,
+          imageProviderBuilder: widget.imageProviderBuilder,
         ),
       ),
     );
