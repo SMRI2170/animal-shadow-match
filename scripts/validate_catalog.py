@@ -92,7 +92,7 @@ def _mask_quality_errors(alpha: Image.Image) -> list[str]:
                     if binary[neighbor] and not seen[neighbor]:
                         seen[neighbor] = 1
                         stack.append(neighbor)
-        if count <= 3:
+        if count <= 6:
             tiny_components += 1
     if tiny_components >= 12:
         errors.append(f"silhouette has {tiny_components} isolated speckles")
