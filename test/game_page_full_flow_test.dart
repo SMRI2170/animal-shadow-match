@@ -191,18 +191,20 @@ void main() {
         reason: 'Continue button must be present on the review area');
   });
 
-  testWidgets('GamePage reproduces a non-deterministic set with a seeded RNG',
+  testWidgets('GamePage drives one correct tap through the injected '
+      'MemoryImage path without exceptions',
       (tester) async {
-    // Verify the wiring with a non-default random source by adding a tiny
-    // sanity check: pump + tap the first correct tile, observe SolvedState,
-    // observe ImageProvider is honoured.
+    // Tiny smoke test: pump + tap the first correct tile, observe the
+    // SolvedState (SingleAssetEffect), let the 850 ms FX complete. The
+    // round factory uses GamePage's default `Random()` (no seeded RNG), so
+    // any valid target/option layout is acceptable; the assertion is that
+    // the injected MemoryImage path does not leak a FlutterError.
     await _pumpGamePage(
       tester,
       items: items,
       images: images,
       progressStore: InMemoryGameProgressStore(),
     );
-    // Drive one correct tap.
     expect(find.byKey(const ValueKey('headline-image')), findsOneWidget);
     final image = tester.widget<Image>(
       find.descendant(
@@ -215,11 +217,9 @@ void main() {
     await tester.pump();
     expect(find.byType(SingleAssetEffect), findsOneWidget,
         reason: 'a correct tap must transition to SolvedState with FX');
-    // The injected ImageProviderBuilder must have been consulted: no
-    // exception fired when the SingleAssetEffect's image becomes an
-    // injected MemoryImage.
     await tester.pumpAndSettle(const Duration(seconds: 3));
-    expect(tester.takeException(), isNull);
+    expect(tester.takeException(), isNull,
+        reason: 'no exception during the injected MemoryImage flow');
   });
 
   testWidgets('GamePage transitions SetCompleted -> Rest -> Resting -> Resume '
