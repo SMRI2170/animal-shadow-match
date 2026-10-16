@@ -43,6 +43,8 @@ jobs:
           python -m unittest discover -s scripts/tests \
             -p 'test_validate_catalog.py' -v
           python -m unittest discover -s scripts/tests \
+            -p 'test_process_ai_demo.py' -v
+          python -m unittest discover -s scripts/tests \
             -p 'test_generate_v6_placeholders.py' -v
       - name: Generate v6 placeholders into a scratch directory
         run: |
