@@ -45,7 +45,20 @@ jobs:
           python -m unittest discover -s scripts/tests \
             -p 'test_process_ai_demo.py' -v
           python -m unittest discover -s scripts/tests \
+            -p 'test_render_silhouette_sheet.py' -v
+          python -m unittest discover -s scripts/tests \
             -p 'test_generate_v6_placeholders.py' -v
+      - name: Render 96px silhouette QA sheet
+        run: |
+          python scripts/render_silhouette_sheet.py \
+            --catalog assets/catalog/development.json \
+            --output "$RUNNER_TEMP/silhouette-qa.png"
+      - name: Upload human-review silhouette sheet
+        uses: actions/upload-artifact@v4
+        with:
+          name: silhouette-qa-development
+          path: ${{ runner.temp }}/silhouette-qa.png
+          retention-days: 14
       - name: Generate v6 placeholders into a scratch directory
         run: |
           set -euo pipefail
