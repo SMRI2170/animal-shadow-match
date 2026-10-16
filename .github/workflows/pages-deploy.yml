@@ -106,14 +106,18 @@ jobs:
         # before we even start a build. If main moved on while the
         # CI workflow was still finishing, the green we are about
         # to publish is no longer the latest green, so we abort.
+        # The repository is public, so `git ls-remote` works without
+        # authentication; we deliberately do NOT use GITHUB_TOKEN here
+        # because the publish step no longer needs it and `set -u`
+        # would otherwise fail on the unset variable.
         run: |
           set -euo pipefail
           PUBLISH_SHA="${{ steps.resolve_sha.outputs.publish_sha }}"
-          git init -q /tmp/origin_check
-          git -C /tmp/origin_check remote add origin \
-            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          MAIN_TIP="$(git -C /tmp/origin_check ls-remote origin main | awk '{print $1}')"
-          rm -rf /tmp/origin_check
+          MAIN_TIP="$(
+            git ls-remote \
+              "https://github.com/${GITHUB_REPOSITORY}.git" \
+              refs/heads/main | awk '{print $1}'
+          )"
           if [ -z "$MAIN_TIP" ]; then
             echo "::error::could not resolve main tip"
             exit 1
@@ -168,16 +172,17 @@ jobs:
         # Build can take long enough that main advances again.
         # Repeat the same tip check here so a build that *was* green
         # for its CI but no longer matches the latest main is not
-        # promoted to Pages.
+        # promoted to Pages. Same unauthenticated `git ls-remote` as
+        # the entry-time guard, for the same reason.
         env:
           PUBLISH_SHA: ${{ needs.build.outputs.publish_sha }}
         run: |
           set -euo pipefail
-          git init -q /tmp/origin_check_deploy
-          git -C /tmp/origin_check_deploy remote add origin \
-            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          MAIN_TIP="$(git -C /tmp/origin_check_deploy ls-remote origin main | awk '{print $1}')"
-          rm -rf /tmp/origin_check_deploy
+          MAIN_TIP="$(
+            git ls-remote \
+              "https://github.com/${GITHUB_REPOSITORY}.git" \
+              refs/heads/main | awk '{print $1}'
+          )"
           if [ -z "$MAIN_TIP" ] || [ "$MAIN_TIP" != "$PUBLISH_SHA" ]; then
             echo "::error::main moved on while Pages build was running"
             echo "::error::expected $PUBLISH_SHA, got $MAIN_TIP"
