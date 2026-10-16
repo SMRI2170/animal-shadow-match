@@ -3,18 +3,14 @@
 Pipeline (offline, no network):
 
 1. Load each PNG from ``assets/development/ai_demo_raw/<node_id>.png``.
-2. Crop a centred 1024x1024 region down to 512x512 with a 35px margin.
-3. Synthesise a transparent PNG by thresholding near-white pixels to alpha
-   0. This is intentionally conservative — the AI-generated backgrounds
-   are uniform off-white, so a generous threshold produces a clean mask
-   without harming jelly/toy silhouettes. It is **only** meant for
-   development/demo playthroughs; production placement still routes
-   images through `scripts/prepare_assets.py` after a human-approved
-   rembg pass.
-4. Write ``assets/development/<id>.webp`` (512x512 transparent) and
-   ``assets/development/<id>_shadow.webp`` (identical alpha, dark fill).
-5. Rewrite ``assets/catalog/development.json`` so the catalog loader
-   can resolve these IDs.
+2. Require a genuinely transparent source PNG. For AI-generated opaque
+   PNGs, first perform offline background removal with prepare_assets.py
+   --bg-mode auto_draft and review the resulting <id>_rembg.png.
+3. Crop/resize the reviewed PNG to 512x512 while preserving its alpha.
+4. Validate the mask and write color/shadow WebP pairs to development.
+5. Emit a *candidate-only* index (ai_demo_candidates.json). Never append
+   unapproved items to the playable development.json catalog. Production
+   promotion is handled by Issue #31 after human review.
 
 Usage::
 
@@ -32,17 +28,16 @@ import sys
 from pathlib import Path
 
 from PIL import Image
+from validate_catalog import _mask_quality_errors
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = ROOT / "assets/development/ai_demo_raw"
 OUT_DIR = ROOT / "assets/development"
-INDEX_PATH = ROOT / "assets/catalog/development.json"
+CANDIDATE_INDEX_PATH = ROOT / "assets/development/ai_demo_candidates.json"
 PROMPTS_PATH = ROOT / "assets/generation/minimax_object_prompts.json"
 
 SIZE = 512
-MARGIN = 35
 SHADOW_RGB = (37, 49, 52)
-ALPHA_THRESHOLD = 235  # pixels with luminance >= this become fully transparent.
 ID_PATTERN = re.compile(r"^[a-z0-9_]+$")
 
 # Demo ids chosen up-front for the first batch (avoid name collisions
@@ -72,15 +67,20 @@ def _load_prompts() -> dict:
 
 
 def _background_mask(image: Image.Image) -> Image.Image:
-    """Make near-white pixels transparent; keep coloured pixels opaque."""
+    """Preserve a reviewed alpha matte; never guess background from RGB."""
     rgba = image.convert("RGBA")
-    pixels = rgba.load()
-    w, h = rgba.size
-    for y in range(h):
-        for x in range(w):
-            r, g, b, _a = pixels[x, y]
-            if r >= ALPHA_THRESHOLD and g >= ALPHA_THRESHOLD and b >= ALPHA_THRESHOLD:
-                pixels[x, y] = (r, g, b, 0)
+    alpha = rgba.getchannel("A")
+    lo, hi = alpha.getextrema()
+    if lo == 255:
+        raise ValueError(
+            "fully opaque AI image; first remove its background with rembg "
+            "(prepare_assets.py --bg-mode auto_draft), review *_rembg.png"
+        )
+    if hi == 0:
+        raise ValueError("fully transparent AI image")
+    quality_errors = _mask_quality_errors(alpha)
+    if quality_errors:
+        raise ValueError("bad silhouette alpha: " + "; ".join(quality_errors))
     return rgba
 
 
@@ -119,7 +119,6 @@ def _lookup_prompt(item_id: str, prompts: dict) -> dict | None:
 
 
 def _build_entry(item_id: str, prompts: dict) -> dict:
-    short_lookup = item_id.removeprefix("demo_")
     prompt_entry = _lookup_prompt(item_id, prompts)
     return {
         "id": item_id,
@@ -160,46 +159,35 @@ def main(argv: list[str] | None = None) -> int:
         if not raw.is_file():
             print(f"missing raw png: {raw}", file=sys.stderr)
             return 1
-        image = Image.open(raw)
-        cropped = _center_crop(image, SIZE)
-        transparent = _background_mask(cropped)
+        # rembg drafts are deliberately not inferred from colors in the raw
+        # image. A human must inspect and keep the transparent draft first.
+        reviewed = raw.with_name(f"{raw.stem}_rembg.png")
+        input_path = reviewed if reviewed.is_file() else raw
         try:
+            with Image.open(input_path) as image:
+                cropped = _center_crop(image, SIZE)
+            transparent = _background_mask(cropped)
             color, shadow = _write_pair(item_id, transparent, force=args.force)
-        except FileExistsError as exc:
-            print(f"skip {item_id}: {exc}", file=sys.stderr)
-            continue
+        except (OSError, ValueError, FileExistsError) as exc:
+            print(f"cannot prepare {item_id}: {exc}", file=sys.stderr)
+            return 1
         new_entries.append(_build_entry(item_id, prompts))
-        print(f"wrote {color.relative_to(ROOT)} + {shadow.relative_to(ROOT)}")
+        print(f"candidate {color.relative_to(ROOT)} + {shadow.relative_to(ROOT)}")
 
-    # Merge with whatever the procedural placeholder generator already put
-    # in development.json, preserving its entries.
-    existing: list[dict] = []
-    if INDEX_PATH.is_file():
-        try:
-            existing = json.loads(INDEX_PATH.read_text(encoding="utf-8")).get(
-                "items", []
-            )
-        except json.JSONDecodeError:
-            existing = []
-    seen = {entry["id"] for entry in existing}
-    for entry in new_entries:
-        if entry["id"] in seen:
-            # Replace with the new demo entry if conflict.
-            existing = [e for e in existing if e["id"] != entry["id"]]
-        existing.append(entry)
-    INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
-    INDEX_PATH.write_text(
+    # Quarantine: the development gameplay catalog is intentionally
+    # untouched. Candidate adoption must go through human review (#31).
+    CANDIDATE_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CANDIDATE_INDEX_PATH.write_text(
         json.dumps(
             {
                 "version": 1,
+                "approved": False,
                 "assets_note": (
-                    "Auto-generated by scripts/generate_v6_placeholders.py "
-                    "and scripts/process_ai_demo.py. Only read when "
-                    "ENABLE_DEVELOPMENT_ASSETS=1. AI demo entries are "
-                    "machine-generated and unverified - human review before "
-                    "production promotion."
+                    "UNREVIEWED AI demos. NOT a playable catalog. "
+                    "Do not merge into development.json or items.json. "
+                    "Review masks at 96dp before Issue #31 promotion."
                 ),
-                "items": existing,
+                "items": new_entries,
             },
             indent=2,
             ensure_ascii=False,
@@ -207,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         + "\n",
         encoding="utf-8",
     )
-    print(f"wrote {INDEX_PATH.relative_to(ROOT)} with {len(existing)} items")
+    print(f"wrote candidate-only index {CANDIDATE_INDEX_PATH.relative_to(ROOT)}")
     return 0
 
 
