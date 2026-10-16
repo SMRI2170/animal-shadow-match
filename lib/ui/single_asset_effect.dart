@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/effect_preset.dart';
 import '../domain/shadow_item.dart';
+import 'image_provider_builder.dart';
 
 /// Plays the gentle, image-only reaction for a single [ShadowItem] when the
 /// player answers a round correctly.
@@ -21,6 +22,7 @@ class SingleAssetEffect extends StatefulWidget {
     this.onCompleted,
     this.imageBundle,
     this.imageProvider,
+    this.imageProviderBuilder,
   });
 
   final ShadowItem item;
@@ -45,6 +47,13 @@ class SingleAssetEffect extends StatefulWidget {
   /// precedence over [assetPath]/[imageBundle]; widget tests pass a
   /// [MemoryImage] here to bypass the asset bundle entirely.
   final ImageProvider? imageProvider;
+
+  /// Optional path -> [ImageProvider] resolver consulted when
+  /// [imageProvider] is null. Wired by [GamePage] so a single builder
+  /// can paint every [Image.asset] in the app — including review
+  /// tiles and resting tiles — without falling back to
+  /// `rootBundle.load('AssetManifest.bin')`.
+  final ImageProviderBuilder? imageProviderBuilder;
 
   @override
   State<SingleAssetEffect> createState() => _SingleAssetEffectState();
@@ -84,11 +93,15 @@ class _SingleAssetEffectState extends State<SingleAssetEffect>
 
   @override
   Widget build(BuildContext context) {
-    // Prefer an injected ImageProvider (widget tests pass MemoryImage to
-    // bypass AssetManifest.bin entirely); otherwise fall back to Image.asset
-    // with the optional [imageBundle] override.
-    final image = widget.imageProvider != null
-        ? Image(image: widget.imageProvider!, fit: BoxFit.contain)
+    // Precedence: explicit imageProvider → imageProviderBuilder(path) →
+    // Image.asset with the optional imageBundle override. The builder
+    // step lets GamePage inject a single resolver for every image in the
+    // tree, including the per-tile SingleAssetEffect under the review
+    // area and the resting screen.
+    final provider = widget.imageProvider ??
+        widget.imageProviderBuilder?.call(widget.assetPath);
+    final image = provider != null
+        ? Image(image: provider, fit: BoxFit.contain)
         : Image.asset(
             widget.assetPath,
             fit: BoxFit.contain,

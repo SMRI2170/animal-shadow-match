@@ -11,6 +11,7 @@ import '../domain/game_state.dart';
 import '../domain/round_factory.dart';
 import '../domain/shadow_item.dart';
 import 'hand_guide.dart';
+import 'image_provider_builder.dart';
 import 'play_area.dart';
 import 'resting_screen.dart';
 import 'single_asset_effect.dart';
@@ -30,6 +31,7 @@ class GamePage extends StatefulWidget {
     this.repository,
     this.disableHandGuide = false,
     this.imageBundle,
+    this.imageProviderBuilder,
   });
 
   /// Optional injection point. Defaults to [SharedPreferencesGameProgressStore].
@@ -51,6 +53,13 @@ class GamePage extends StatefulWidget {
   /// `rootBundle.load('AssetManifest.bin')` failures (Issue #21
   /// follow-up: full GamePage widget test).
   final AssetBundle? imageBundle;
+
+  /// Optional path -> [ImageProvider] resolver used by the headline image,
+  /// the option tiles, and any future Image.asset sites that sit under the
+  /// GamePage. Return null to fall back to [Image.asset] with [imageBundle].
+  /// When non-null the resolver takes precedence and lets widget tests
+  /// inject per-path [MemoryImage]s.
+  final ImageProviderBuilder? imageProviderBuilder;
 
   @override
   State<GamePage> createState() => _GamePageState();
@@ -85,6 +94,7 @@ class _GamePageState extends State<GamePage> {
           progressStore: _progressStore,
           disableHandGuide: widget.disableHandGuide,
           imageBundle: widget.imageBundle,
+          imageProviderBuilder: widget.imageProviderBuilder,
         );
       },
     );
@@ -98,6 +108,7 @@ class _PlayBoard extends StatefulWidget {
     required this.progressStore,
     this.disableHandGuide = false,
     this.imageBundle,
+    this.imageProviderBuilder,
   });
 
   final CatalogLoadResult result;
@@ -105,6 +116,9 @@ class _PlayBoard extends StatefulWidget {
   final GameProgressStore progressStore;
   final bool disableHandGuide;
   final AssetBundle? imageBundle;
+
+  /// Forwarded from [GamePage]. See [ImageProviderBuilder] for semantics.
+  final ImageProviderBuilder? imageProviderBuilder;
 
   @override
   State<_PlayBoard> createState() => _PlayBoardState();
@@ -251,9 +265,9 @@ class _PlayBoardState extends State<_PlayBoard> {
                     ),
                     child: KeyedSubtree(
                       key: const ValueKey<String>('headline-image'),
-                      child: Image.asset(
-                        state.round.target.imagePath,
-                        fit: BoxFit.contain,
+                      child: _resolveImage(
+                        assetPath: state.round.target.imagePath,
+                        builder: widget.imageProviderBuilder,
                         bundle: widget.imageBundle,
                         semanticLabel: 'Find the matching silhouette for '
                             '${state.round.target.accessibilityLabel ?? state.round.target.id}',
@@ -280,6 +294,7 @@ class _PlayBoardState extends State<_PlayBoard> {
                             isWrongChoice: _wrongChoice == item.id,
                             onTap: () => _onChoice(item),
                             imageBundle: widget.imageBundle,
+                            imageProviderBuilder: widget.imageProviderBuilder,
                           ),
                       ],
                     ),
@@ -332,6 +347,7 @@ class _PlayBoardState extends State<_PlayBoard> {
                       assetPath: state.round.target.imagePath,
                       onCompleted: _onEffectCompleted,
                       imageBundle: widget.imageBundle,
+                      imageProviderBuilder: widget.imageProviderBuilder,
                     ),
                   ),
                 ),
@@ -354,6 +370,7 @@ class _PlayBoardState extends State<_PlayBoard> {
                             isWrongChoice: false,
                             onTap: null,
                             imageBundle: widget.imageBundle,
+                            imageProviderBuilder: widget.imageProviderBuilder,
                           ),
                       ],
                     ),
@@ -373,6 +390,7 @@ class _PlayBoardState extends State<_PlayBoard> {
       onContinue: _onContinueFromSet,
       onRest: _onRestFromSet,
       imageBundle: widget.imageBundle,
+      imageProviderBuilder: widget.imageProviderBuilder,
     );
   }
 
@@ -381,6 +399,7 @@ class _PlayBoardState extends State<_PlayBoard> {
       items: state.recentItems,
       onResume: _onResumeFromRest,
       imageBundle: widget.imageBundle,
+      imageProviderBuilder: widget.imageProviderBuilder,
     );
   }
 }
@@ -424,6 +443,7 @@ class _OptionTile extends StatelessWidget {
     required this.isWrongChoice,
     required this.onTap,
     this.imageBundle,
+    this.imageProviderBuilder,
   });
 
   /// Stable key string used by integration tests to find this tile.
@@ -434,6 +454,7 @@ class _OptionTile extends StatelessWidget {
   final bool isWrongChoice;
   final VoidCallback? onTap;
   final AssetBundle? imageBundle;
+  final ImageProviderBuilder? imageProviderBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -462,9 +483,9 @@ class _OptionTile extends StatelessWidget {
               ),
             ],
           ),
-          child: Image.asset(
-            item.shadowPath,
-            fit: BoxFit.contain,
+          child: _resolveImage(
+            assetPath: item.shadowPath,
+            builder: imageProviderBuilder,
             bundle: imageBundle,
             semanticLabel:
                 '${item.accessibilityLabel ?? item.id} silhouette',
@@ -498,4 +519,33 @@ class _DemoBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Resolves an asset path to a Widget Image. Order of precedence:
+///
+/// 1. [ImageProviderBuilder] (per-path MemoryImage override for tests).
+/// 2. [Image.asset] with the optional [bundle] override (production path).
+///
+/// Anything still null at this layer is a code smell: callers should never
+/// invoke [_resolveImage] without at least an [assetPath] to fall back on.
+Image _resolveImage({
+  required String assetPath,
+  required ImageProviderBuilder? builder,
+  required AssetBundle? bundle,
+  String? semanticLabel,
+}) {
+  final provider = builder?.call(assetPath);
+  if (provider != null) {
+    return Image(
+      image: provider,
+      fit: BoxFit.contain,
+      semanticLabel: semanticLabel,
+    );
+  }
+  return Image.asset(
+    assetPath,
+    fit: BoxFit.contain,
+    bundle: bundle,
+    semanticLabel: semanticLabel,
+  );
 }
