@@ -1,12 +1,13 @@
 """Validate catalog references, alpha masks, and empty/duplicate asset IDs.
 
-Supports two catalog files:
+Supports three catalog files:
 
 * ``assets/catalog/animals.json`` — legacy v4 demo entries. Kept as a
   regression set so the 8 demo animals never silently break during the v6
   migration (Issue #29).
-* ``assets/catalog/items.json`` — the v6 single-asset object catalog. New
-  approved MiniMax-generated objects land here.
+* ``assets/catalog/items.json`` — approved v6 single-asset catalog.
+* ``assets/catalog/development.json`` — procedural placeholders only; AI
+  candidates are quarantined until a human approves them (Issue #89).
 
 Each entry must declare either ``id`` fields matching the rules documented
 in ``minimax_object_prompts.json`` (lowercase ascii, digits, underscores),
@@ -34,13 +35,77 @@ from PIL import Image, ImageChops
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY_CATALOG = ROOT / "assets/catalog/animals.json"
 ITEMS_CATALOG = ROOT / "assets/catalog/items.json"
+DEVELOPMENT_CATALOG = ROOT / "assets/catalog/development.json"
 
 ID_PATTERN = re.compile(r"^[a-z0-9_]+$")
 ALLOWED_PRESETS = {"squish", "wobble", "bounce", "inflate"}
 MIN_ITEMS = 4
 
 
-def _validate_entry(item: dict, available_ids: set[str], root: Path) -> list[str]:
+def _mask_quality_errors(alpha: Image.Image) -> list[str]:
+    """Conservative mask QA for playable assets (not a toddler usability test).
+
+    Downsample to 128x128 so the same geometry limits work for 512x512
+    originals, with small anti-alias differences tolerated. All thresholds
+    are deliberately broad; the contact-sheet/human review is still required.
+    """
+    mask = alpha.resize((128, 128), Image.Resampling.NEAREST)
+    binary = bytes(1 if value >= 64 else 0 for value in mask.tobytes())
+    occupied = sum(binary)
+    ratio = occupied / len(binary)
+    errors: list[str] = []
+    if ratio < 0.015 or ratio > 0.83:
+        errors.append(f"silhouette occupancy {ratio:.1%} outside 1.5%-83%")
+
+    # Objects should have a margin; near-full-frame dark backgrounds touch
+    # the edges even when a few white holes make the alpha non-opaque.
+    side = 128
+    frame = 2
+    edge_indices = (
+        y * side + x
+        for y in range(side)
+        for x in range(side)
+        if x < frame or x >= side - frame or y < frame or y >= side - frame
+    )
+    edge_hits = sum(binary[i] for i in edge_indices)
+    border_pixels = side * side - (side - frame * 2) ** 2
+    if edge_hits / border_pixels > 0.08:
+        errors.append("silhouette touches >8% of the outer 2px frame")
+
+    # Detect many isolated compression/removal speckles. Unlike a strict
+    # one-component requirement, this allows legitimate detached decorations.
+    seen = bytearray(len(binary))
+    tiny_components = 0
+    for start, value in enumerate(binary):
+        if not value or seen[start]:
+            continue
+        seen[start] = 1
+        stack = [start]
+        count = 0
+        while stack:
+            current = stack.pop()
+            count += 1
+            y, x = divmod(current, side)
+            for ny in range(max(0, y - 1), min(side, y + 2)):
+                for nx in range(max(0, x - 1), min(side, x + 2)):
+                    neighbor = ny * side + nx
+                    if binary[neighbor] and not seen[neighbor]:
+                        seen[neighbor] = 1
+                        stack.append(neighbor)
+        if count <= 6:
+            tiny_components += 1
+    if tiny_components >= 12:
+        errors.append(f"silhouette has {tiny_components} isolated speckles")
+    return errors
+
+
+def _validate_entry(
+    item: dict,
+    available_ids: set[str],
+    root: Path,
+    *,
+    check_quality: bool = False,
+) -> list[str]:
     errors: list[str] = []
     item_id = item.get("id")
     if not isinstance(item_id, str) or not ID_PATTERN.fullmatch(item_id):
@@ -74,7 +139,6 @@ def _validate_entry(item: dict, available_ids: set[str], root: Path) -> list[str
         # Filename basename must be the item id; protects against writing
         # assets/<other>.webp while the catalog says <id>.
         stem = file.stem
-        expected = {item_id, f"{item_id}_shadow"}
         if key == "image" and stem != item_id:
             errors.append(
                 f"{rel_path}: basename should be {item_id!r}, got {stem!r}",
@@ -93,6 +157,11 @@ def _validate_entry(item: dict, available_ids: set[str], root: Path) -> list[str
                 diff = ImageChops.difference(color_a, dark_a)
                 if diff.getbbox() is not None:
                     errors.append(f"mask mismatch for {item_id}")
+                if check_quality:
+                    errors.extend(
+                        f"{item_id}: {message}"
+                        for message in _mask_quality_errors(dark_a)
+                    )
         except Exception as exc:
             errors.append(f"{item_id}: alpha comparison failed ({exc})")
 
@@ -155,8 +224,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     errors.extend(items_warns)
 
-    legacy_ids = {entry.get("id") for entry in legacy_entries if isinstance(entry.get("id"), str)}
-    item_ids = {entry.get("id") for entry in items_entries if isinstance(entry.get("id"), str)}
+    dev_entries, dev_warns = _validate_catalog_file(
+        DEVELOPMENT_CATALOG, root=ROOT, required=False,
+    )
+    errors.extend(dev_warns)
+
+    # Reject invalid types and within-catalog duplicates instead of silently
+    # overwriting IDs in the runtime byId map.
+    for path, entries in (
+        (LEGACY_CATALOG, legacy_entries),
+        (ITEMS_CATALOG, items_entries),
+        (DEVELOPMENT_CATALOG, dev_entries),
+    ):
+        ids = [entry.get("id") for entry in entries if isinstance(entry, dict)]
+        if len(ids) != len(set(ids)):
+            errors.append(f"{path}: duplicate IDs")
+
+    legacy_ids = {entry.get("id") for entry in legacy_entries if isinstance(entry, dict) and isinstance(entry.get("id"), str)}
+    item_ids = {entry.get("id") for entry in items_entries if isinstance(entry, dict) and isinstance(entry.get("id"), str)}
+    dev_ids = {entry.get("id") for entry in dev_entries if isinstance(entry, dict) and isinstance(entry.get("id"), str)}
     duplicates = sorted(legacy_ids & item_ids)
     if duplicates:
         # Crossing the two lists is allowed, but a single id existing in
@@ -175,19 +261,25 @@ def main(argv: list[str] | None = None) -> int:
                     )
                     break
 
-    available = legacy_ids | item_ids
+    available = legacy_ids | item_ids | dev_ids
     for entry in items_entries:
-        errors.extend(_validate_entry(entry, available, ROOT))
+        errors.extend(_validate_entry(entry, available, ROOT, check_quality=True))
     for entry in legacy_entries:
         errors.extend(_validate_entry(entry, available, ROOT))
+    for entry in dev_entries:
+        if "ai_demo" in entry.get("silhouetteFeatures", []) or str(entry.get("id", "")).startswith("demo_"):
+            errors.append(
+                f"{entry.get('id')}: unreviewed AI demo must stay out of development.json"
+            )
+        errors.extend(_validate_entry(entry, available, ROOT, check_quality=True))
 
     if args.strict_min_items and len(item_ids) < args.min_items:
         errors.append(
             f"items.json declares {len(item_ids)} approved items; need at "
             f"least {args.min_items} before promoting to the live pool.",
         )
-    if not legacy_ids and not item_ids:
-        errors.append("both catalogs are empty")
+    if not legacy_ids and not item_ids and not dev_ids:
+        errors.append("all catalogs are empty")
 
     if errors:
         print("VALIDATION FAILED", file=sys.stderr)
@@ -197,7 +289,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(
         f"OK: {len(legacy_ids)} legacy animals + "
-        f"{len(item_ids)} new items, masks and IDs verified",
+        f"{len(item_ids)} approved items + {len(dev_ids)} development items, "
+        "masks and silhouette QA verified",
     )
     return 0
 
