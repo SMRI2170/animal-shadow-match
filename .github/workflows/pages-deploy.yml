@@ -1,46 +1,46 @@
 name: Pages deploy
 
-# Deploys the development-theme Flutter web build to the repository's
-# `gh-pages` branch.
+# Deploys the development-theme Flutter web build to GitHub Pages.
 #
-# Why trigger on `workflow_run` (not `push`):
-# The Pages job must not publish a build whose CI did not pass. CI
-# runs in parallel with `push` events, so tying this workflow to
-# `push` would race it against the CI of the same commit and could
-# publish a green build whose flutter test, web smoke, or assets
-# gate had already failed. Hooking into
-# `workflow_run: workflows: [CI], types: [completed]` makes this
-# gate itself: it only fires after CI finishes, and only if the CI
-# workflow reports `success`.
+# Why the switch from `gh-pages` push to `actions/deploy-pages`:
+# GitHub Actions' built-in `GITHUB_TOKEN` does NOT trigger a Pages
+# build when it pushes to the `gh-pages` branch. The push looks
+# successful, but the public site stays on the last external push.
+# The supported way to publish via Actions is:
+#   1) build the static site locally
+#   2) `actions/upload-pages-artifact` uploads it as a Pages artifact
+#   3) `actions/deploy-pages` (with `pages: write` + `id-token: write`)
+#      publishes it through the official Pages pipeline.
+# This workflow follows that recipe.
 #
-# Trigger sources covered:
-# * main merge: CI runs first; on conclusion=success this workflow
-#   fires against `workflow_run.head_sha`.
-# * main merge whose CI was skipped / canceled: this workflow does
-#   not fire at all.
-# * manual: `workflow_dispatch` lets the owner re-publish without a
-#   CI gate (useful for an admin override).
+# One-time owner prereq (this UI step *cannot* be expressed in YAML):
+#   Settings -> Pages -> Build and deployment -> Source = "GitHub Actions"
+# Until that toggle is on, `actions/deploy-pages` will succeed but
+# the public site will not update.
 #
-# Output:
-# * `gh-pages` branch receives a fresh commit whose tree == `build/web`
-#   plus a `.nojekyll` marker and a `404.html` SPA fallback that
-#   mirrors `index.html`. The existing history on gh-pages is
-#   discarded via `--force-with-lease`; that's intentional because
-#   the production preview is always the newest green main commit.
+# Triggers:
+# * `workflow_run` on the `CI` workflow completing successfully on
+#   main. Tying this to a CI conclusion stops the deploy racing a
+#   failing CI run.
+# * `workflow_dispatch` for a manual republish.
 #
-# Pinned pitfalls from PR #92 / #93 review (fixed in this revision):
-# * CI-gated: only deploy after CI concludes green.
-# * `env: GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}` is explicit, so
-#   `set -u` does not bail in the push step.
-# * `--base-href=/animal-shadow-match/` matches the GitHub Pages
-#   project-page URL so assets load from the right relative path.
-# * Checkout uses `workflow_run.head_sha` so we publish the commit
-#   that actually passed CI, not whatever SHA is currently on main.
-# * Empty-diff guard: if `build/web` did not change we exit 0
-#   instead of producing an empty commit.
-# * Stale-CI guard: when invoked via `workflow_run`, the published
-#   head_sha must still be the tip of `main`; otherwise the run was
-#   superseded by a newer push and we abort.
+# CI-gating:
+# * The job `if:` only runs the workflow when the upstream CI
+#   workflow reported `success`, or for an explicit dispatch.
+# * Every step that pins the publish SHA also pins `actions/checkout`
+#   to that exact commit, so the artifact is built from the commit
+#   CI validated (not whatever is currently on main).
+# * A "Re-check stale CI" step before deployment compares the
+#   publish SHA against the live `origin/main` HEAD. If main moved
+#   between the build job and the deploy job, the deploy is aborted
+#   to avoid overwriting gh-pages with a stale build.
+#
+# Permissions:
+# * `contents: read` for the checkout. We no longer push to gh-pages
+#   ourselves.
+# * `pages: write` + `id-token: write` are required for
+#   `actions/deploy-pages`. They are deliberately NOT kept on any
+#   other workflow.
 
 on:
   workflow_run:
@@ -50,39 +50,48 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: pages-deploy
   cancel-in-progress: true
 
+# Solve: the repo's Pages source must be "GitHub Actions" before any
+# deploy in this workflow takes effect. The Pages settings page lives
+# under Settings -> Pages -> Build and deployment -> Source. The
+# rest of the publish path is automatic once that toggle is on.
+#
+# Steps below also gate on the upstream CI workflow reporting
+# `success` (or on an explicit dispatch).
+
 jobs:
   build:
     runs-on: ubuntu-24.04
     env:
-      # `secrets.GITHUB_TOKEN` is auto-provisioned by GitHub Actions;
-      # we forward it explicitly so the push step does not trip
-      # `set -u` on an unset variable.
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GH_PAGES_BRANCH: gh-pages
       BASE_HREF: /animal-shadow-match/
     # Run only when:
     #  - the upstream CI workflow reported `success`, OR
-    #  - the trigger was a manual `workflow_dispatch` on main.
-    # Anything else (CI still queued / failed / canceled / off-main
-    # dispatch) skips this job entirely, so a broken main never
-    # reaches gh-pages.
+    #  - the trigger was a manual `workflow_dispatch`.
+    # Anything else (CI still queued / failed / canceled) skips
+    # the build entirely, so a broken main never reaches Pages.
     if: >-
       (github.event_name == 'workflow_run' &&
         github.event.workflow_run.conclusion == 'success') ||
       (github.event_name == 'workflow_dispatch')
+    # Surface the resolved publish SHA so the deploy job can re-verify
+    # `origin/main` against the same value, even after a long build.
+    outputs:
+      publish_sha: ${{ steps.resolve_sha.outputs.publish_sha }}
 
     steps:
       - name: Resolve which commit to publish
         id: resolve_sha
-        # When invoked via workflow_run the upstream commit is on
-        # `event.workflow_run.head_sha`. For a manual dispatch we
-        # publish whatever is currently on main.
+        # workflow_run.head_sha is the commit the CI workflow checked
+        # out and ran the test suite against. For a manual dispatch
+        # there is no upstream CI run, so we publish whatever is
+        # currently on main (GITHUB_SHA).
         run: |
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
             echo "publish_sha=${{ github.event.workflow_run.head_sha }}" \
@@ -92,17 +101,14 @@ jobs:
           fi
         shell: bash
 
-      - name: Stale-CI guard
-        # When triggered by workflow_run, refuse to publish if the SHA
-        # that passed CI is no longer the tip of main. That happens
-        # when a faster push landed between CI completion and this
-        # job starting. Avoid overwriting gh-pages with an older
-        # build that did not cover the newest main commit.
-        if: github.event_name == 'workflow_run'
-        env:
-          PUBLISH_SHA: ${{ steps.resolve_sha.outputs.publish_sha }}
+      - name: Reject stale CI at entry
+        # Confirm the resolved publish SHA is still the tip of main
+        # before we even start a build. If main moved on while the
+        # CI workflow was still finishing, the green we are about
+        # to publish is no longer the latest green, so we abort.
         run: |
           set -euo pipefail
+          PUBLISH_SHA="${{ steps.resolve_sha.outputs.publish_sha }}"
           git init -q /tmp/origin_check
           git -C /tmp/origin_check remote add origin \
             "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
@@ -120,7 +126,6 @@ jobs:
 
       - uses: actions/checkout@v7
         with:
-          # Pin to the exact commit that passed CI.
           ref: ${{ steps.resolve_sha.outputs.publish_sha }}
 
       - uses: subosito/flutter-action@v2
@@ -137,52 +142,47 @@ jobs:
             --dart-define=CATALOG_THEME=development \
             --dart-define=ENABLE_DEVELOPMENT_ASSETS=true
 
-      - name: Upload web bundle artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: flutter-web-development
-          path: build/web
-          if-no-files-found: error
-          retention-days: 14
+      - name: Sanity-check the bundle
+        run: |
+          test -f build/web/index.html
+          test -f build/web/main.dart.js
+          test -f build/web/flutter.js
+          test -f build/web/flutter_bootstrap.js
+          test -f build/web/assets/AssetManifest.bin
+          test -f build/web/assets/FontManifest.json
 
-      - name: Publish to gh-pages
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Re-check stale CI at deploy time
+        # Build can take long enough that main advances again.
+        # Repeat the same tip check here so a build that *was* green
+        # for its CI but no longer matches the latest main is not
+        # promoted to Pages.
         env:
-          PUBLISH_SHA: ${{ steps.resolve_sha.outputs.publish_sha }}
+          PUBLISH_SHA: ${{ needs.build.outputs.publish_sha }}
         run: |
           set -euo pipefail
-          : "${GITHUB_TOKEN:?GITHUB_TOKEN must be set}"
-          : "${GH_REPOSITORY:=${GITHUB_REPOSITORY}}"
-          mkdir -p /tmp/ghpages
-          pushd /tmp/ghpages >/dev/null
-          git init -q
-          git remote add origin \
-            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GH_REPOSITORY}.git"
-          git fetch --depth=1 origin "$GH_PAGES_BRANCH"
-          if git show-ref --verify --quiet "refs/remotes/origin/$GH_PAGES_BRANCH"; then
-            git checkout -q -B "$GH_PAGES_BRANCH" "origin/$GH_PAGES_BRANCH"
-          else
-            echo "::error::$GH_PAGES_BRANCH does not exist on origin."
-                "Create it once with:"
-                "  git checkout --orphan $GH_PAGES_BRANCH"
-                "  git commit --allow-empty -m 'init'"
-                "  git push origin $GH_PAGES_BRANCH"
+          git init -q /tmp/origin_check_deploy
+          git -C /tmp/origin_check_deploy remote add origin \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          MAIN_TIP="$(git -C /tmp/origin_check_deploy ls-remote origin main | awk '{print $1}')"
+          rm -rf /tmp/origin_check_deploy
+          if [ -z "$MAIN_TIP" ] || [ "$MAIN_TIP" != "$PUBLISH_SHA" ]; then
+            echo "::error::main moved on while Pages build was running"
+            echo "::error::expected $PUBLISH_SHA, got $MAIN_TIP"
             exit 1
           fi
-          git rm -r --quiet . || true
-          cp -r "${GITHUB_WORKSPACE}/build/web/." .
-          touch .nojekyll
-          cp index.html 404.html
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Empty-diff guard: if build/web has not changed, skip the
-          # commit step instead of producing an empty commit the
-          # branch refuses to accept.
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No changes to deploy; gh-pages is already current."
-            exit 0
-          fi
-          git -c advice.detachedHead=false commit -q \
-            -m "Deploy development-theme Flutter web to Pages (${PUBLISH_SHA:0:7})"
-          git push --force-with-lease origin "$GH_PAGES_BRANCH"
-          popd >/dev/null
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
