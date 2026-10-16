@@ -94,11 +94,26 @@ class RoundFactory {
     // 2. Pick (optionCount - 1) distractors in a strict priority order so
     //    the player always sees the target plus a full row of options.
     final distractors = <ShadowItem>[];
+    final presentGroups = <String>{};
     void consider(ShadowItem candidate) {
       if (candidate.id == target.id) return;
       if (similarityBanned.contains(candidate.id)) return;
       if (distractors.any((d) => d.id == candidate.id)) return;
+      // Distractor-vs-distractor exclusion: once a similarityGroup is
+      // represented in the distractor list, no second candidate from the
+      // same group can be added. This prevents "stacked_disks" and
+      // "wavy_disc" from appearing side-by-side as wrong answers, which
+      // would reduce a 4-option question to a 2-option question visually
+      // (Issue #89 follow-up, part two). Null-group items are exempt —
+      // they have no silhouette-similarity contract.
+      if (candidate.similarityGroup != null &&
+          presentGroups.contains(candidate.similarityGroup)) {
+        return;
+      }
       distractors.add(candidate);
+      if (candidate.similarityGroup != null) {
+        presentGroups.add(candidate.similarityGroup!);
+      }
     }
 
     // 2a. Hand-curated distractor ids from the target item itself.

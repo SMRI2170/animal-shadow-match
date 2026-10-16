@@ -330,5 +330,70 @@ void main() {
         expect(round.options.map((o) => o.id).toSet().length, 4);
       }
     });
+
+    test('two distractors may not share a similarityGroup', () {
+      // Issue #89 follow-up part two: when the target's similarityGroup
+      // is null, the distractor list must still avoid pairs from the
+      // same similarityGroup. This protects 4-option rounds that would
+      // otherwise collapse to "find the odd one out among 2 look-alikes".
+      final factory = RoundFactory(random: Random(35));
+      final catalog = <ShadowItem>[
+        _animal('a_jelly', category: 'jelly'),
+        _animal('stacked_disks',
+            category: 'toys', similarityGroup: 'round_disc'),
+        _animal('wavy_disc',
+            category: 'toys', similarityGroup: 'round_disc'),
+        _animal('bubble_paddle',
+            category: 'toys', similarityGroup: 'paddle_egg'),
+        _animal('knob_ball',
+            category: 'toys', similarityGroup: 'paddle_egg'),
+        _animal('puzzle_bean',
+            category: 'toys', similarityGroup: 'paddle_egg'),
+        _animal('soft_planet', category: 'cosmic'),
+      ];
+      for (var i = 0; i < 200; i++) {
+        final round = factory.create(catalog: catalog, optionCount: 4);
+        expect(round.options.length, 4);
+        final distractors = round.options
+            .where((o) => o.id != round.target.id)
+            .toList();
+        final seenGroups = <String>{};
+        for (final d in distractors) {
+          if (d.similarityGroup == null) continue;
+          expect(seenGroups.contains(d.similarityGroup), isFalse,
+              reason:
+                  'round $i: distractor ${d.id} (group "${d.similarityGroup}") '
+                  'duplicates a group already present among distractors');
+          seenGroups.add(d.similarityGroup!);
+        }
+      }
+    });
+
+    test('catalog whose only distinct group is the target\'s surfaces a '
+        'StateError instead of pairing same-group distractors', () {
+      // When optionCount is large enough that the only fillable
+      // distractors all share one similarityGroup (different from the
+      // target's), the new distractor-vs-distractor rule must trigger
+      // the hard StateError rather than silently pair the same group.
+      final factory = RoundFactory(random: Random(36));
+      final catalog = <ShadowItem>[
+        _animal('target', category: 'a'),
+        _animal('similar_1',
+            category: 'b', similarityGroup: 'only_group'),
+        _animal('similar_2',
+            category: 'c', similarityGroup: 'only_group'),
+        _animal('similar_3',
+            category: 'd', similarityGroup: 'only_group'),
+      ];
+      // optionCount=4 means 3 distractors required; the only group
+      // available has 3 members, but at most one can land in the
+      // distractor list. Two slots remain unfillable -> StateError.
+      expect(
+        () => factory.create(catalog: catalog, optionCount: 4),
+        throwsStateError,
+        reason: 'factory must refuse to fill distractors with multiple '
+            'members of the same similarityGroup',
+      );
+    });
   });
 }
