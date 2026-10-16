@@ -1,21 +1,25 @@
 name: Pages deploy
 
 # Deploys the development-theme Flutter web build to the repository's
-# `gh-pages` branch (which already exists on origin).
+# `gh-pages` branch.
 #
-# Why a dedicated workflow:
-# * CI in `.github/workflows/ci.yml` runs on every PR; a Pages build is
-#   expensive (Flutter web compilation + Dart-define evaluation) and
-#   is best limited to main + manual triggers.
-# * The web bundle is large; publishing it once per main commit keeps
-#   gh-pages steady.
-# * The two image-pipeline workflows (`promote-minimax-assets.yml`,
-#   `minimax-images.yml`) cover different concerns; Pages only needs
-#   the assembled `build/web`.
+# Why trigger on `workflow_run` (not `push`):
+# The Pages job must not publish a build whose CI did not pass. CI
+# runs in parallel with `push` events, so tying this workflow to
+# `push` would race it against the CI of the same commit and could
+# publish a green build whose flutter test, web smoke, or assets
+# gate had already failed. Hooking into
+# `workflow_run: workflows: [CI], types: [completed]` makes this
+# gate itself: it only fires after CI finishes, and only if the CI
+# workflow reports `success`.
 #
-# Trigger:
-# * push to main (after the Squash & merge of an integration PR).
-# * workflow_dispatch for an ad-hoc republish by the owner.
+# Trigger sources covered:
+# * main merge: CI runs first; on conclusion=success this workflow
+#   fires against `workflow_run.head_sha`.
+# * main merge whose CI was skipped / canceled: this workflow does
+#   not fire at all.
+# * manual: `workflow_dispatch` lets the owner re-publish without a
+#   CI gate (useful for an admin override).
 #
 # Output:
 # * `gh-pages` branch receives a fresh commit whose tree == `build/web`
@@ -24,21 +28,24 @@ name: Pages deploy
 #   discarded via `--force-with-lease`; that's intentional because
 #   the production preview is always the newest green main commit.
 #
-# Owner prereqs (one-time, manual, *not* in this workflow):
-# 1. Confirm `gh-pages` already exists on origin (this repo does).
-# 2. The first push here writes a new commit on top of whatever
-#    content gh-pages holds. To wipe stale content use
-#    `--force-with-lease` (the default here).
-#
-# Pinned pitfalls from Issue #92 review (fixed in this revision):
+# Pinned pitfalls from PR #92 / #93 review (fixed in this revision):
+# * CI-gated: only deploy after CI concludes green.
 # * `env: GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}` is explicit, so
 #   `set -u` does not bail in the push step.
 # * `--base-href=/animal-shadow-match/` matches the GitHub Pages
 #   project-page URL so assets load from the right relative path.
-# * No `git checkout --orphan` step -- the branch already exists.
+# * Checkout uses `workflow_run.head_sha` so we publish the commit
+#   that actually passed CI, not whatever SHA is currently on main.
+# * Empty-diff guard: if `build/web` did not change we exit 0
+#   instead of producing an empty commit.
+# * Stale-CI guard: when invoked via `workflow_run`, the published
+#   head_sha must still be the tip of `main`; otherwise the run was
+#   superseded by a newer push and we abort.
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -53,17 +60,68 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     env:
-      # `secrets.GITHUB_TOKEN` is automatically provisioned by
-      # GitHub Actions for every job; we forward it to the script
-      # so the push step doesn't trip `set -u` when referencing
-      # the unset variable.
+      # `secrets.GITHUB_TOKEN` is auto-provisioned by GitHub Actions;
+      # we forward it explicitly so the push step does not trip
+      # `set -u` on an unset variable.
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_PAGES_BRANCH: gh-pages
       BASE_HREF: /animal-shadow-match/
+    # Run only when:
+    #  - the upstream CI workflow reported `success`, OR
+    #  - the trigger was a manual `workflow_dispatch` on main.
+    # Anything else (CI still queued / failed / canceled / off-main
+    # dispatch) skips this job entirely, so a broken main never
+    # reaches gh-pages.
+    if: >-
+      (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch')
+
     steps:
+      - name: Resolve which commit to publish
+        id: resolve_sha
+        # When invoked via workflow_run the upstream commit is on
+        # `event.workflow_run.head_sha`. For a manual dispatch we
+        # publish whatever is currently on main.
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "publish_sha=${{ github.event.workflow_run.head_sha }}" \
+              >> "$GITHUB_OUTPUT"
+          else
+            echo "publish_sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+
+      - name: Stale-CI guard
+        # When triggered by workflow_run, refuse to publish if the SHA
+        # that passed CI is no longer the tip of main. That happens
+        # when a faster push landed between CI completion and this
+        # job starting. Avoid overwriting gh-pages with an older
+        # build that did not cover the newest main commit.
+        if: github.event_name == 'workflow_run'
+        env:
+          PUBLISH_SHA: ${{ steps.resolve_sha.outputs.publish_sha }}
+        run: |
+          set -euo pipefail
+          git init -q /tmp/origin_check
+          git -C /tmp/origin_check remote add origin \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          MAIN_TIP="$(git -C /tmp/origin_check ls-remote origin main | awk '{print $1}')"
+          rm -rf /tmp/origin_check
+          if [ -z "$MAIN_TIP" ]; then
+            echo "::error::could not resolve main tip"
+            exit 1
+          fi
+          if [ "$MAIN_TIP" != "$PUBLISH_SHA" ]; then
+            echo "::error::main moved on while CI was running"
+            echo "::error::expected $PUBLISH_SHA, got $MAIN_TIP"
+            exit 1
+          fi
+
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 1
+          # Pin to the exact commit that passed CI.
+          ref: ${{ steps.resolve_sha.outputs.publish_sha }}
 
       - uses: subosito/flutter-action@v2
         with:
@@ -71,11 +129,6 @@ jobs:
           cache: true
 
       - name: Build Flutter web (development theme)
-        # The site showcases the procedural development catalog so
-        # reviewers can play without the v6 approved-image set.
-        # Switching to the approved v6 catalog is a matter of swapping
-        # these --dart-define values once items.json is populated by
-        # `promote-minimax-assets.yml` (see owners for that switch).
         run: |
           flutter config --enable-web
           flutter pub get
@@ -93,6 +146,8 @@ jobs:
           retention-days: 14
 
       - name: Publish to gh-pages
+        env:
+          PUBLISH_SHA: ${{ steps.resolve_sha.outputs.publish_sha }}
         run: |
           set -euo pipefail
           : "${GITHUB_TOKEN:?GITHUB_TOKEN must be set}"
@@ -103,14 +158,11 @@ jobs:
           git remote add origin \
             "https://x-access-token:${GITHUB_TOKEN}@github.com/${GH_REPOSITORY}.git"
           git fetch --depth=1 origin "$GH_PAGES_BRANCH"
-          # Reuse the existing branch if it is already there; create an
-          # orphan branch only if origin is missing it. Either path
-          # produces a working tree we can replace with build/web.
           if git show-ref --verify --quiet "refs/remotes/origin/$GH_PAGES_BRANCH"; then
             git checkout -q -B "$GH_PAGES_BRANCH" "origin/$GH_PAGES_BRANCH"
           else
-            echo "::error::$GH_PAGES_BRANCH does not exist on origin. Create"
-                "it once with:"
+            echo "::error::$GH_PAGES_BRANCH does not exist on origin."
+                "Create it once with:"
                 "  git checkout --orphan $GH_PAGES_BRANCH"
                 "  git commit --allow-empty -m 'init'"
                 "  git push origin $GH_PAGES_BRANCH"
@@ -119,12 +171,18 @@ jobs:
           git rm -r --quiet . || true
           cp -r "${GITHUB_WORKSPACE}/build/web/." .
           touch .nojekyll
-          # SPA fallback so client-side routes resolve to the shell.
           cp index.html 404.html
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Empty-diff guard: if build/web has not changed, skip the
+          # commit step instead of producing an empty commit the
+          # branch refuses to accept.
           git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to deploy; gh-pages is already current."
+            exit 0
+          fi
           git -c advice.detachedHead=false commit -q \
-            -m "Deploy development-theme Flutter web to Pages (${GITHUB_SHA::7})"
+            -m "Deploy development-theme Flutter web to Pages (${PUBLISH_SHA:0:7})"
           git push --force-with-lease origin "$GH_PAGES_BRANCH"
           popd >/dev/null
