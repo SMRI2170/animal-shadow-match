@@ -1,0 +1,113 @@
+name: Pages deploy
+
+# Deploys the development-theme Flutter web build to `gh-pages`.
+#
+# Why a separate workflow:
+# * CI in `.github/workflows/ci.yml` runs on every PR; a Pages build is
+#   expensive (gradle + flutter build web) and should only run on the
+#   main branch (or a manual workflow_dispatch).
+# * The Flutter web bundle is large (~10-30 MB) and should be uploaded
+#   once per main commit, not on every PR.
+# * `promote-minimax-assets.yml` and `minimax-images.yml` cover different
+#   image-pipeline concerns; Pages needs only the assembled build dir.
+#
+# Trigger:
+# * push to main (after the Squash & merge of an integration PR finishes)
+# * workflow_dispatch for an ad-hoc re-publish by the owner.
+#
+# Output:
+# * `gh-pages` branch is reset to the contents of `build/web` for that
+#   run. This overwrites whatever the branch held (force-with-lease),
+#   which is intentional: the production preview is always the newest
+#   green main commit, and no incremental cache is relied on.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Avoid two deploys racing on the same main push — only the latest
+# concurrent run wins; older ones get cancelled and never reach the
+# push step.
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The Flutter web build reads `assets/` at the commit we are
+          # publishing; historic commits are not used.
+          fetch-depth: 1
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build Flutter web (development theme)
+        # The site showcases the procedural-development catalog so reviewers
+        # can play without the v6 approved-image set. Approved images
+        # (the S2 catalog) would be layered on top of this via a separate
+        # run that consumes `assets/catalog/items.json` populated by
+        # `promote-minimax-assets.yml`; see owners for that switch.
+        run: |
+          flutter config --enable-web
+          flutter pub get
+          flutter build web --release \
+            --dart-define=CATALOG_THEME=development \
+            --dart-define=ENABLE_DEVELOPMENT_ASSETS=true
+
+      - name: Upload web bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web-development
+          path: build/web
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish to gh-pages
+        # `gh-pages` is treated as a publish artefact, not a source
+        # branch: we rebuild it from scratch each run. `--orphan` makes
+        # the resulting branch have no parent history, which keeps it
+        # tiny and avoids dragging old build commits forward.
+        env:
+          GH_PAGES_BRANCH: gh-pages
+        run: |
+          set -euo pipefail
+          if ! git ls-remote --heads origin "$GH_PAGES_BRANCH" \
+              | grep -q "$GH_PAGES_BRANCH"; then
+            echo "::error::$GH_PAGES_BRANCH branch does not exist on origin." \
+              "Create it once with `git checkout --orphan $GH_PAGES_BRANCH`" \
+              "and an empty initial commit, then re-run."
+            exit 1
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Fresh working tree, then checkout the existing branch (which
+          # has no relation to main).
+          mkdir -p /tmp/ghpages
+          pushd /tmp/ghpages >/dev/null
+          git init -q
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "$GH_PAGES_BRANCH"
+          git checkout -q -B "$GH_PAGES_BRANCH" "origin/$GH_PAGES_BRANCH"
+          # Replace the tree with the Flutter web build.
+          git rm -r --quiet . || true
+          cp -r "${GITHUB_WORKSPACE}/build/web/." .
+          # .nojekyll lets GitHub Pages serve files/dirs that start with `_`.
+          touch .nojekyll
+          # SPA fallback: every unknown path falls back to index.html so the
+          # client-side router can take over without 404s.
+          cp index.html 404.html
+          git add -A
+          git -c advice.detachedHead=false commit -q \
+            -m "Deploy development-theme Flutter web to Pages (${GITHUB_SHA::7})"
+          git push --force-with-lease origin "$GH_PAGES_BRANCH"
+          popd >/dev/null
