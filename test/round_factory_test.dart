@@ -8,6 +8,7 @@ ShadowItem _animal(
   String id, {
   String category = 'animal',
   List<String> distractors = const [],
+  String? similarityGroup,
 }) {
   return ShadowItem(
     id: id,
@@ -15,6 +16,7 @@ ShadowItem _animal(
     shadowPath: 'assets/animals/${id}_shadow.webp',
     category: category,
     distractorIds: distractors,
+    similarityGroup: similarityGroup,
   );
 }
 
@@ -220,6 +222,112 @@ void main() {
         expect(round.options.length, 2);
         expect(round.options.map((a) => a.id).toSet().length, 2);
         expect(round.options.where((a) => a.id == round.target.id).length, 1);
+      }
+    });
+  });
+
+  // -------- Issue #89 follow-up: similarity-group exclusion --------
+
+  group('Issue #89 follow-up: similarityGroup excludes same-shape distractors', () {
+    test('no distractor shares the target similarityGroup', () {
+      // `stacked_disks` and `wavy_disc` are visually interchangeable
+      // (both round with perimeter dots). Both belong to `round_disc`.
+      // When either is the target, the other must NEVER appear as a
+      // distractor — even when it would otherwise be a natural fill.
+      final factory = RoundFactory(random: Random(31));
+      final catalog = <ShadowItem>[
+        _animal('stacked_disks',
+            category: 'toys', similarityGroup: 'round_disc'),
+        _animal('wavy_disc',
+            category: 'toys', similarityGroup: 'round_disc'),
+        _animal('puzzle_bean', category: 'toys'),
+        _animal('soft_planet', category: 'cosmic'),
+        _animal('moon_stone', category: 'cosmic'),
+      ];
+      for (var i = 0; i < 200; i++) {
+        final round = factory.create(catalog: catalog, optionCount: 3);
+        expect(round.options.length, 3);
+        final others = round.options
+            .where((o) => o.id != round.target.id)
+            .toList();
+        if (round.target.similarityGroup != null) {
+          for (final d in others) {
+            expect(d.similarityGroup, isNot(round.target.similarityGroup),
+                reason: 'round $i: distractor ${d.id} shares the target '
+                    '${round.target.id} similarityGroup '
+                    '"${round.target.similarityGroup}"');
+          }
+        }
+      }
+    });
+
+    test('items in different similarityGroups co-exist as target/distractor', () {
+      // Sanity: the similarity rule only matches same-group pairs; a
+      // round with target in group A may freely include a distractor in
+      // group B. Use a 3-item catalog with optionCount=2 so the single
+      // distractor slot is filled by the only different-category item,
+      // deterministically.
+      final factory = RoundFactory(random: Random(32));
+      final catalog = <ShadowItem>[
+        _animal('a_jelly', category: 'jelly', similarityGroup: 'group_a'),
+        _animal('b_jelly', category: 'toy', similarityGroup: 'group_b'),
+        _animal('c_toy', category: 'toy', similarityGroup: 'group_c'),
+      ];
+      final round = factory.create(
+        catalog: catalog,
+        optionCount: 2,
+        previousTargetIds: const ['c_toy'],
+      );
+      expect(round.target.id, 'a_jelly');
+      expect(round.options.where((o) => o.id == 'b_jelly').length, 1,
+          reason: 'cross-group distractor must be allowed when groups differ');
+    });
+
+    test('catalog whose same-group population leaves too few distractors '
+        'surfaces a StateError instead of silently falling back', () {
+      // Pin the target to `one` so its similarityGroup (`shared`) is
+      // deterministic. Four of the five items share that group; the
+      // factory would need 3 distinct distractors in *different* groups
+      // to satisfy optionCount=4, but the catalog only has one such item
+      // (`five`). Hard StateError, not a silent fallback (Issue #3).
+      final factory = RoundFactory(random: Random(33));
+      final five = <ShadowItem>[
+        _animal('one', category: 'a', similarityGroup: 'shared'),
+        _animal('two', category: 'b', similarityGroup: 'shared'),
+        _animal('three', category: 'c', similarityGroup: 'shared'),
+        _animal('four', category: 'd', similarityGroup: 'shared'),
+        _animal('five', category: 'e', similarityGroup: 'alone'),
+      ];
+      // Ban every id except `one` so the target is pinned to it
+      // regardless of the Random sequence.
+      expect(
+        () => factory.create(
+          catalog: five,
+          optionCount: 4,
+          previousTargetIds: const ['two', 'three', 'four', 'five'],
+        ),
+        throwsStateError,
+        reason: 'factory must refuse to take a same-group distractor '
+            'or pad with the target id',
+      );
+    });
+
+    test('null similarityGroup on the target imposes no constraint', () {
+      // Backwards-compat: items without a similarityGroup must keep the
+      // pre-Issue-#89 behaviour where they may co-occur as target and
+      // distractor.
+      final factory = RoundFactory(random: Random(34));
+      final plain = <ShadowItem>[
+        _animal('a'),
+        _animal('b'),
+        _animal('c'),
+        _animal('d'),
+        _animal('e'),
+      ];
+      for (var i = 0; i < 100; i++) {
+        final round = factory.create(catalog: plain, optionCount: 4);
+        expect(round.options.length, 4);
+        expect(round.options.map((o) => o.id).toSet().length, 4);
       }
     });
   });

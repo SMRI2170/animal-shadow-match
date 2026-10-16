@@ -76,11 +76,27 @@ class RoundFactory {
       bannedCategories: bannedCategories,
     );
 
+    // Every item that shares `target.similarityGroup` is banned as a
+    // distractor (Issue #89 follow-up). This is a hard contract: if the
+    // catalog's same-group population makes it impossible to fill
+    // `optionCount - 1` distinct distractors, [create] surfaces a
+    // [StateError] rather than silently falling back to a confusing round.
+    final similarityBanned = <String>{
+      for (final item in catalog)
+        if (item.similarityGroup != null &&
+            item.similarityGroup == target.similarityGroup)
+          item.id,
+    };
+    // The target id stays inside `similarityBanned` (its own group), but
+    // the target id check below short-circuits before the ban applies, so
+    // we don't need to special-case it.
+
     // 2. Pick (optionCount - 1) distractors in a strict priority order so
     //    the player always sees the target plus a full row of options.
     final distractors = <ShadowItem>[];
     void consider(ShadowItem candidate) {
       if (candidate.id == target.id) return;
+      if (similarityBanned.contains(candidate.id)) return;
       if (distractors.any((d) => d.id == candidate.id)) return;
       distractors.add(candidate);
     }
