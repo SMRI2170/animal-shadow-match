@@ -153,16 +153,40 @@ class _PlayBoardState extends State<_PlayBoard> {
     _resumed = true;
     final saved = await widget.progressStore.load();
     if (!mounted || saved == null) return;
-    if (saved.totalCompleted <= 0) return;
     // Issue #22 strict resume: the snapshot covers phase + round +
     // option ordering, so a cold start lands the child on the exact
-    // question they had open. Old/broken snapshots fall through to a
-    // fresh start instead of crashing the app.
+    // question they had open. We try to restore every persisted
+    // snapshot, even one with totalCompleted == 0 (e.g. the child
+    // quit during the very first question of a fresh install) so the
+    // option-tile order survives. Old/broken snapshots fall through
+    // to a fresh start instead of crashing the app.
     try {
       setState(() {
         _controller.restoreFrom(saved);
         _state = _controller.current;
+        // Re-derive the widget's wrongChoice highlight from the
+        // controller's restored SolvingState so the UI matches the
+        // persisted snapshot.
+        if (_state is SolvingState) {
+          _wrongChoice = (_state as SolvingState).wrongChoiceId;
+        }
       });
+      // Re-arm the red-tint clear timer for a wrongChoiceId that
+      // was restored from a snapshot, otherwise the highlight would
+      // stay on screen until the next user interaction.
+      if (mounted && _state is SolvingState &&
+          (_state as SolvingState).wrongChoiceId != null) {
+        _wrongResetTimer?.cancel();
+        _wrongResetTimer = Timer(const Duration(milliseconds: 500), () {
+          if (!mounted) return;
+          _controller.clearWrongChoice();
+          setState(() {
+            _state = _controller.current;
+            _wrongChoice = null;
+          });
+          _persistProgress();
+        });
+      }
     } on StateError {
       // Snapshot is unusable (e.g. catalog changed). Drop it and start
       // a brand-new run; the next save will overwrite the bad record.
@@ -184,12 +208,22 @@ class _PlayBoardState extends State<_PlayBoard> {
       _persistProgress();
     } else {
       _wrongResetTimer?.cancel();
-      setState(() => _wrongChoice = item.id);
-      // Persist the wrongChoiceId too, so a cold start after a wrong
-      // tap puts the highlight back on the same tile.
+      // Wrong answer: route through the controller so the snapshot
+      // includes the wrongChoiceId (Issue #22 review follow-up).
+      final next = _controller.onChoice(item.id);
+      setState(() {
+        _state = next;
+        _wrongChoice = item.id;
+      });
       _persistProgress();
       _wrongResetTimer = Timer(const Duration(milliseconds: 500), () {
-        if (mounted) setState(() => _wrongChoice = null);
+        if (!mounted) return;
+        _controller.clearWrongChoice();
+        setState(() {
+          _state = _controller.current;
+          _wrongChoice = null;
+        });
+        _persistProgress();
       });
     }
   }

@@ -67,7 +67,19 @@ List<ShadowItem> _catalog() => [
 Future<void> _pump(
   WidgetTester tester, {
   required GameProgressStore store,
+  bool tearDown = false,
 }) async {
+  // Real cold restart: replace the current widget tree with an empty
+  // placeholder first so Flutter actually disposes the previous
+  // _PlayBoardState (and its GameController / timers). Without this,
+  // pumpWidget(MaterialApp(home: GamePage(...))) reuses the existing
+  // State because the runtime type and position are identical, which
+  // would mean the "cold restart" path is never actually exercised
+  // (Issue #22 review follow-up).
+  if (tearDown) {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  }
   final items = _catalog();
   final bundle = bundleForItems(
     items,
@@ -95,6 +107,25 @@ Future<void> _pump(
 /// Lift the private _OptionTile via a public API. The tile factory uses
 /// `ValueKey<String>('option-${item.id}')` so we can match by key.
 String _optionKey(String id) => 'option-$id';
+
+List<String> _optionIds(WidgetTester tester) {
+  return tester
+      .widgetList<KeyedSubtree>(find.byType(KeyedSubtree))
+      .where((k) =>
+          (k.key is ValueKey<String>) &&
+          (k.key as ValueKey<String>).value.startsWith('option-'))
+      .map((k) =>
+          (k.key as ValueKey<String>).value.substring('option-'.length))
+      .toList();
+}
+
+String _pickWrongId(WidgetTester tester, String targetId) {
+  final options = _optionIds(tester);
+  for (final id in options) {
+    if (id != targetId) return id;
+  }
+  throw StateError('round has no option distinct from $targetId');
+}
 
 String _headlineSemanticLabel(WidgetTester tester) {
   // The headline Image is keyed in SolvingState; in SolvedState the same
@@ -155,7 +186,7 @@ void main() {
 
     // Recreate GamePage from scratch with the same store, simulating a
     // cold launch with the persisted snapshot on disk.
-    await _pump(tester, store: store);
+    await _pump(tester, store: store, tearDown: true);
     final secondSemantics = _headlineSemanticLabel(tester);
     final secondTargetId = secondSemantics.split(' ').last;
     expect(secondTargetId, firstTargetId,
@@ -185,7 +216,7 @@ void main() {
     await tester.tap(find.byKey(ValueKey<String>(_optionKey(firstTargetId))));
     await tester.pump();
     // The post-correct snapshot is Solved (FX playing). Recreate.
-    await _pump(tester, store: store);
+    await _pump(tester, store: store, tearDown: true);
     expect(find.byType(GamePage), findsOneWidget);
     // We can't observe GameController.state directly from the widget
     // tree, but the FX widget (SingleAssetEffect) being on screen with
@@ -209,7 +240,7 @@ void main() {
     expect(find.byType(ReviewPlayArea), findsOneWidget,
         reason: '5 correct answers should land on the review screen');
     // Cold restart.
-    await _pump(tester, store: store);
+    await _pump(tester, store: store, tearDown: true);
     expect(find.byType(ReviewPlayArea), findsOneWidget,
         reason: 'after cold restart the review screen must be visible');
   });
@@ -228,7 +259,7 @@ void main() {
     await tester.pump();
     expect(find.byType(RestingScreen), findsOneWidget);
     // Cold restart.
-    await _pump(tester, store: store);
+    await _pump(tester, store: store, tearDown: true);
     expect(find.byType(RestingScreen), findsOneWidget,
         reason: 'RestingScreen must survive a cold restart');
   });
@@ -247,7 +278,7 @@ void main() {
     final preSaveSem = _headlineSemanticLabel(tester);
     final preSaveTargetId = preSaveSem.split(' ').last;
 
-    await _pump(tester, store: store);
+    await _pump(tester, store: store, tearDown: true);
     final postSem = _headlineSemanticLabel(tester);
     final postTargetId = postSem.split(' ').last;
     expect(postTargetId, preSaveTargetId,
@@ -328,5 +359,68 @@ void main() {
     expect(fresh.current, isA<SolvingState>());
     final next = fresh.current! as SolvingState;
     expect(next.round.target.id, isNot(s.round.target.id));
+  });
+
+  testWidgets('GamePage restores the very first question (totalCompleted==0) '
+      'after a cold restart with tear-down', (tester) async {
+    // Issue #22 review follow-up: previously the resume path skipped
+    // every snapshot with totalCompleted == 0, which silently bypassed
+    // a fresh-install child who quits on the very first question.
+    final store = InMemoryGameProgressStore();
+    await _pump(tester, store: store);
+    // Capture the live first round layout.
+    final firstHeadline = _headlineSemanticLabel(tester);
+    final firstTargetId = firstHeadline.split(' ').last;
+    final firstOptions = _optionIds(tester);
+
+    // Real cold restart: tear the widget tree down first.
+    await _pump(tester, store: store, tearDown: true);
+
+    final secondHeadline = _headlineSemanticLabel(tester);
+    final secondTargetId = secondHeadline.split(' ').last;
+    expect(secondTargetId, firstTargetId,
+        reason: 'first-round target id must survive a cold restart '
+            'even when totalCompleted is still 0');
+    expect(_optionIds(tester), equals(firstOptions),
+        reason: 'first-round option order must survive a cold restart');
+  });
+
+  testWidgets('GamePage restores the wrong-tile highlight across cold '
+      'restart and clears it on the timer', (tester) async {
+    // Issue #22 review follow-up: the wrongChoiceId is now part of
+    // the persisted snapshot. After a cold restart the highlight
+    // must come back; once the red-tint timer fires in the live UI
+    // it must drop out of the persisted snapshot too so the next
+    // cold restart does not paint the highlight again.
+    final store = InMemoryGameProgressStore();
+    await _pump(tester, store: store);
+    final firstHeadline = _headlineSemanticLabel(tester);
+    final firstTargetId = firstHeadline.split(' ').last;
+    final wrongId = _pickWrongId(tester, firstTargetId);
+    await tester.tap(find.byKey(ValueKey<String>(_optionKey(wrongId))));
+    // Advance enough time for _wrongChoice to be set but not yet for
+    // the 500ms clear timer to fire.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    final wrongBefore = await store.load();
+    expect(wrongBefore?.wrongChoiceId, equals(wrongId),
+        reason: 'wrongChoiceId must reach the snapshot immediately');
+
+    // Cold restart with teardown — highlight must come back.
+    await _pump(tester, store: store, tearDown: true);
+    final afterRestart = await store.load();
+    expect(afterRestart?.wrongChoiceId, equals(wrongId),
+        reason: 'wrongChoiceId must survive a cold restart');
+
+    // Wait out the 500ms clear timer in the new GamePage's wrongReset
+    // path. The clear must drop the wrongChoiceId from the snapshot
+    // so the next cold restart shows a clean board.
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    final afterClear = await store.load();
+    expect(afterClear?.wrongChoiceId, isNull,
+        reason: 'wrongChoiceId must clear from the snapshot once the '
+            'red-tint timer fires');
   });
 }

@@ -71,9 +71,24 @@ class GameController {
       current = next;
       return next;
     }
+    // Wrong answer: the state stays Solving, but the wrongChoiceId is
+    // now part of the state so [snapshot] / [restoreFrom] can persist
+    // and re-hydrate the highlight (Issue #22 review).
     final next = solving.copyWith(wrongChoiceId: chosenId);
     current = next;
     return next;
+  }
+
+  /// Drop the wrong-tile highlight from the active SolvingState. Called
+  /// after the UI's red-tint timer fires so the next snapshot no longer
+  /// carries the wrongChoiceId. No-op outside SolvingState or when the
+  /// highlight is already cleared.
+  void clearWrongChoice() {
+    final state = current;
+    if (state is! SolvingState) return;
+    if (state.wrongChoiceId == null) return;
+    final next = state.copyWith(wrongChoiceId: null);
+    current = next;
   }
 
   GameState onEffectFinished() {
@@ -262,6 +277,13 @@ class GameController {
       SessionPhase.setCompleted => _setSize,
       SessionPhase.resting => _setSize,
     };
+    // Pick optionCount from the snapshot's totalCompleted so the
+    // restored round's tile count is right even after the 5/15 ladder
+    // (Issue #22 review). Computed locally so a later throw from
+    // _reconstructRound does not commit a partial state.
+    final newOptionCount = saved.totalCompleted < 5
+        ? 2
+        : (saved.totalCompleted < 15 ? 3 : 4);
     final GameState newCurrent;
     switch (saved.phase) {
       case SessionPhase.solving:
@@ -274,7 +296,7 @@ class GameController {
         newCurrent = SolvingState(
           round: round,
           completedInSet: newCompletedInSet,
-          optionCount: _optionCount,
+          optionCount: newOptionCount,
           wrongChoiceId: saved.wrongChoiceId,
         );
       case SessionPhase.solved:
@@ -285,7 +307,7 @@ class GameController {
         newCurrent = SolvedState(
           round: round,
           completedInSet: newCompletedInSet,
-          optionCount: _optionCount,
+          optionCount: newOptionCount,
         );
       case SessionPhase.setCompleted:
         newCurrent = SetCompletedState(

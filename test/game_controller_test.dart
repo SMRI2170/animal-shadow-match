@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:animal_shadow_match/data/game_progress_store.dart';
 import 'package:animal_shadow_match/domain/game_controller.dart';
 import 'package:animal_shadow_match/domain/game_progress_phase.dart';
 import 'package:animal_shadow_match/domain/game_state.dart';
@@ -668,6 +669,74 @@ void main() {
       }
       expect(fresh.current, isA<SetCompletedState>());
       expect(fresh.totalCompleted, 5);
+    });
+
+    test('Solving snapshot at totalCompleted>=5 -> restoreFrom uses 3-option '
+        'SolvingState', () {
+      // Issue #22 review follow-up: restoreFrom must compute optionCount
+      // from the saved totalCompleted (5/15 ladder: 2/3/4) so a restart
+      // after the first set does not regress the round to 2 options.
+      final factory = RoundFactory(random: Random(70));
+      final controller = GameController(
+        catalog: catalog,
+        factory: factory,
+      );
+      // Drive the controller past the first set so totalCompleted >= 5.
+      for (var i = 0; i < 5; i++) {
+        controller.start();
+        final s = controller.current! as SolvingState;
+        controller.onChoice(s.round.target.id);
+        controller.onEffectFinished();
+      }
+      // Now we are on SetCompletedState; jump back into SolvingState
+      // for a clean mid-set-2 snapshot via onContinue().
+      controller.onContinue();
+      final solving = controller.current! as SolvingState;
+      // Pin a known option list so we can compare post-restore.
+      final snapshot = controller.snapshot();
+      snapshot.copyWith(
+        currentRoundOptionIds:
+            solving.round.options.map((o) => o.id).toList(),
+        currentRoundTargetId: solving.round.target.id,
+        roundIndex: solving.completedInSet,
+      );
+      final fresh = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(110)),
+      );
+      fresh.restoreFrom(snapshot);
+      final restored = fresh.current! as SolvingState;
+      expect(restored.optionCount, 3,
+          reason: 'restored round after the first set must use 3 options');
+    });
+
+    test('Solving snapshot at totalCompleted>=15 -> restoreFrom uses 4-option '
+        'SolvingState', () {
+      // Cover the second ladder rung as well. Synthesize a snapshot that
+      // represents totalCompleted==16, roundIndex=1 in the 4-option phase
+      // by directly assembling the GameProgress that restoreFrom expects.
+      // This isolates the optionCount derivation from the controller's
+      // own progress counters (which can't easily climb to 15 in a
+      // 5-item catalog).
+      final options = catalog.take(4).toList();
+      final snapshot = GameProgress(
+        totalCompleted: 16,
+        lastRecentItemIds: const <String>[],
+        lastPlayedAt: DateTime.now(),
+        currentSetIndex: 3,
+        phase: SessionPhase.solving,
+        roundIndex: 1,
+        currentRoundOptionIds: options.map((o) => o.id).toList(),
+        currentRoundTargetId: options.first.id,
+      );
+      final fresh = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(111)),
+      );
+      fresh.restoreFrom(snapshot);
+      final restored = fresh.current! as SolvingState;
+      expect(restored.optionCount, 4,
+          reason: 'restored round in the 4-option phase must use 4 options');
     });
   });
 }
