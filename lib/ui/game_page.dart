@@ -149,7 +149,11 @@ class _PlayBoardState extends State<_PlayBoard> {
     if (!mounted || saved == null) return;
     if (saved.totalCompleted <= 0) return;
     setState(() {
-      _controller.resumeFromTotalCompleted(saved.totalCompleted);
+      // Issue #22 strict resume: round the player was on, the exact
+      // option ordering, and the in-set history are all part of the
+      // snapshot, so a cold start lands the child on the same
+      // question they had open — not just on the next set.
+      _controller.restoreFrom(saved);
       _state = _controller.current;
     });
   }
@@ -206,15 +210,10 @@ class _PlayBoardState extends State<_PlayBoard> {
   }
 
   Future<void> _persistProgress() async {
-    final totalCompleted = _controller.totalCompleted;
-    final recent =
-        _controller.recentItems.map((item) => item.id).toList(growable: false);
-    final progress = GameProgress(
-      totalCompleted: totalCompleted,
-      lastRecentItemIds: recent,
-      lastPlayedAt: DateTime.now(),
-      currentSetIndex: totalCompleted,
-    );
+    // Issue #22: persist the full snapshot (phase, round index,
+    // option ordering) instead of just the total counter. The next
+    // cold start lands the child on the same round they had open.
+    final progress = _controller.snapshot();
     await widget.progressStore.save(progress);
   }
 

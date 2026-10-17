@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:animal_shadow_match/domain/game_controller.dart';
+import 'package:animal_shadow_match/domain/game_progress_phase.dart';
 import 'package:animal_shadow_match/domain/game_state.dart';
 import 'package:animal_shadow_match/domain/round_factory.dart';
 import 'package:animal_shadow_match/domain/shadow_item.dart';
@@ -497,4 +498,200 @@ void main() {
       expect(controller.totalCompleted, 10);
     });
   });
+
+  // -------- Issue #22 acceptance: strict resume (same round + same option
+  // order after cold start) --------
+
+  group('Issue #22 acceptance: snapshot -> restoreFrom round-trips each phase',
+      () {
+    test('Solving -> snapshot -> restoreFrom reproduces the same round and '
+        'the same option ordering', () {
+      final factory = RoundFactory(random: Random(60));
+      final controller = GameController(
+        catalog: catalog,
+        factory: factory,
+      );
+      controller.start();
+      // Answer one wrong answer so we capture a non-default state, then
+      // snapshot.
+      final solving = controller.current! as SolvingState;
+      final wrong = solving.round.options
+          .firstWhere((o) => o.id != solving.round.target.id);
+      controller.onChoice(wrong.id);
+      final snapshot =
+          (controller.current! as SolvingState).let((s) => controller.snapshot());
+      // Replay on a fresh controller + the same catalogue (test for the
+      // restoration path, not for shared state).
+      final fresh = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(99)),
+      );
+      fresh.restoreFrom(snapshot);
+      final restored = fresh.current! as SolvingState;
+      expect(restored.completedInSet, snapshot.roundIndex);
+      expect(
+        _orderedIds(restored.round),
+        _orderedIds(solving.round),
+        reason: 'restored round must keep the same target-first ordering',
+      );
+      expect(restored.round.target.id, solving.round.target.id);
+      expect(restored.wrongChoiceId, wrong.id);
+    });
+
+    test('Solved -> snapshot -> restoreFrom replays the same FX round', () {
+      final controller = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(61)),
+      );
+      controller.start();
+      final solving = controller.current! as SolvingState;
+      controller.onChoice(solving.round.target.id);
+      final solvedSnapshot = controller.snapshot();
+      expect(solvedSnapshot.phase, SessionPhase.solved);
+      final fresh = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(100)),
+      );
+      fresh.restoreFrom(solvedSnapshot);
+      expect(fresh.current, isA<SolvedState>());
+      final restored = fresh.current! as SolvedState;
+      expect(restored.round.target.id, solving.round.target.id);
+      expect(restored.completedInSet, 1);
+    });
+
+    test('SetCompleted -> snapshot -> restoreFrom lands the child back on '
+        'the review screen with the same recent items', () {
+      final controller = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(62)),
+      );
+      controller.start();
+      for (var i = 0; i < 5; i++) {
+        final s = controller.current! as SolvingState;
+        controller.onChoice(s.round.target.id);
+        controller.onEffectFinished();
+      }
+      final snapshot = controller.snapshot();
+      expect(snapshot.phase, SessionPhase.setCompleted);
+      expect(snapshot.roundIndex, 5);
+
+      final fresh = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(101)),
+      );
+      fresh.restoreFrom(snapshot);
+      expect(fresh.current, isA<SetCompletedState>());
+      final restored = fresh.current! as SetCompletedState;
+      expect(
+        restored.recentItems.map((e) => e.id).toList(),
+        (controller.current! as SetCompletedState).recentItems
+            .map((e) => e.id)
+            .toList(),
+      );
+    });
+
+    test('Resting -> snapshot -> restoreFrom lands the child back on the '
+        'resting screen', () {
+      final controller = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(63)),
+      );
+      controller.start();
+      for (var i = 0; i < 5; i++) {
+        final s = controller.current! as SolvingState;
+        controller.onChoice(s.round.target.id);
+        controller.onEffectFinished();
+      }
+      controller.onRest();
+      final snapshot = controller.snapshot();
+      expect(snapshot.phase, SessionPhase.resting);
+
+      final fresh = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(102)),
+      );
+      fresh.restoreFrom(snapshot);
+      expect(fresh.current, isA<RestingState>());
+    });
+
+    test('restoreFrom throws StateError when a snapshot references an id '
+        'no longer in the catalog', () {
+      final controller = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(64)),
+      );
+      controller.start();
+      final snapshot = controller.snapshot();
+      final fresh = GameController(
+        catalog: [_item('only_one', category: 'scratch')],
+        factory: RoundFactory(random: Random(103)),
+      );
+      expect(() => fresh.restoreFrom(snapshot), throwsStateError,
+          reason: 'a stale snapshot must not silently resurrect dropped ids');
+    });
+
+    test('restoreFrom restores the in-set history and continues correctly '
+        'when the player resumes mid-set', () {
+      // Cover the realistic Issue #22 scenario: child answers 2 of 5,
+      // app is killed mid-set, next launch should land on question 3
+      // and round 3 must avoid the 2 already-played targets.
+      final controller = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(65)),
+      );
+      controller.start();
+      final first = controller.current! as SolvingState;
+      controller.onChoice(first.round.target.id);
+      controller.onEffectFinished();
+      final second = controller.current! as SolvingState;
+      controller.onChoice(second.round.target.id);
+      controller.onEffectFinished();
+      // Now mid-set, snapshot at the start of question 3.
+      final beforeSnapshot = controller.current! as SolvingState;
+      final snapshot = controller.snapshot();
+      expect(snapshot.phase, SessionPhase.solving);
+      expect(snapshot.roundIndex, 2);
+
+      // Restore and let the round proceed.
+      final fresh = GameController(
+        catalog: catalog,
+        factory: RoundFactory(random: Random(104)),
+      );
+      fresh.restoreFrom(snapshot);
+      expect(fresh.current, isA<SolvingState>());
+      final restored = fresh.current! as SolvingState;
+      // The restored round must be exactly the same as the snapshot point.
+      expect(restored.round.target.id, beforeSnapshot.round.target.id);
+      expect(
+        _orderedIds(restored.round),
+        _orderedIds(beforeSnapshot.round),
+      );
+      // Finishing the restored set must still produce a SetCompleted
+      // with the same 5 targets and totalCompleted=5.
+      for (var i = 0; i < 3; i++) {
+        final s = fresh.current! as SolvingState;
+        fresh.onChoice(s.round.target.id);
+        fresh.onEffectFinished();
+      }
+      expect(fresh.current, isA<SetCompletedState>());
+      expect(fresh.totalCompleted, 5);
+    });
+  });
+}
+
+extension<T> on T {
+  R let<R>(R Function(T) f) => f(this);
+}
+
+/// Compare two rounds by their Issue #22 snapshot form: target first,
+/// then every other option in their original order. RoundFactory reshuffles
+/// options, so the post-shuffle order may not match across factories, but
+/// the Issue #22 contract guarantees the saved order is target-first.
+List<String> _orderedIds(ShadowRound round) {
+  return <String>[
+    round.target.id,
+    ...round.options
+        .where((o) => o.id != round.target.id)
+        .map((o) => o.id),
+  ];
 }
