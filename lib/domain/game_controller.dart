@@ -47,22 +47,6 @@ class GameController {
     return state;
   }
 
-  /// Order the saved option list so the target id appears at index 0.
-  /// [ShadowRound.options] is the post-shuffle order returned by
-  /// [RoundFactory.create], so it may not start with the target. The
-  /// Issue #22 strict-resume contract guarantees the saved list's head
-  /// is always the target so the controller can rebuild the round with
-  /// `_reconstructRound` and still surface the correct answer.
-  static List<String> _orderedOptionIds(ShadowRound round) {
-    final targetId = round.target.id;
-    return <String>[
-      targetId,
-      ...round.options
-          .map((o) => o.id)
-          .where((id) => id != targetId),
-    ];
-  }
-
   GameState onChoice(String chosenId) {
     final solving = _expectSolving();
     final round = solving.round;
@@ -170,8 +154,11 @@ class GameController {
         currentSetIndex: currentSetIndex,
         phase: SessionPhase.solving,
         roundIndex: state.completedInSet,
+        // Preserve the post-shuffle UI order verbatim so the cold-restart
+        // view shows the exact same tile layout (Issue #22).
         currentRoundOptionIds:
-            _orderedOptionIds(state.round).toList(growable: false),
+            state.round.options.map((o) => o.id).toList(growable: false),
+        currentRoundTargetId: state.round.target.id,
         wrongChoiceId: state.wrongChoiceId,
       );
     }
@@ -186,7 +173,8 @@ class GameController {
         // the just-answered round, so its 0-based index is one less.
         roundIndex: state.completedInSet - 1,
         currentRoundOptionIds:
-            _orderedOptionIds(state.round).toList(growable: false),
+            state.round.options.map((o) => o.id).toList(growable: false),
+        currentRoundTargetId: state.round.target.id,
       );
     }
     if (state is SetCompletedState) {
@@ -252,67 +240,82 @@ class GameController {
   ///
   /// Throws [StateError] if the snapshot references ids that are no
   /// longer in the catalogue, e.g. because a [RoundFactory]'s
-  /// distractorIds set was edited between sessions.
+  /// distractorIds set was edited between sessions. The throw leaves
+  /// the controller untouched (atomic restore) so the caller can fall
+  /// back to a fresh start without leaking partial progress counters
+  /// into the next snapshot.
   void restoreFrom(GameProgress saved) {
-    _totalCompleted = saved.totalCompleted;
-    _completedInSet = 0;
-    _lastTarget = null;
-    _lastTargetAcrossSets = null;
-    _usedInSet.clear();
+    // Build the new state in locals first so a failure mid-way (e.g.
+    // _reconstructRound throwing StateError) leaves the live counters
+    // untouched and the caller can keep the fresh-start snapshot.
+    final newUsedInSet = <ShadowItem>[];
     for (final id in saved.lastRecentItemIds) {
       final item = _lookupItem(id);
-      if (item != null) _usedInSet.add(item);
+      if (item != null) newUsedInSet.add(item);
     }
+    final newLastTargetAcrossSets = newUsedInSet.isNotEmpty
+        ? newUsedInSet.last
+        : null;
+    final newCompletedInSet = switch (saved.phase) {
+      SessionPhase.solving => saved.roundIndex,
+      SessionPhase.solved => saved.roundIndex + 1,
+      SessionPhase.setCompleted => _setSize,
+      SessionPhase.resting => _setSize,
+    };
+    final GameState newCurrent;
     switch (saved.phase) {
       case SessionPhase.solving:
-        _completedInSet = saved.roundIndex;
-        final round = _reconstructRound(saved.currentRoundOptionIds);
-        // For Solving at roundIndex 0 the player has just begun a set,
-        // so there is no across-sets last target to avoid.
-        if (_usedInSet.isNotEmpty && saved.roundIndex > 0) {
-          _lastTargetAcrossSets = _usedInSet.last;
-        } else {
-          _lastTargetAcrossSets = null;
-        }
-        current = SolvingState(
+        final round = _reconstructRound(
+          saved.currentRoundOptionIds,
+          targetId: saved.currentRoundTargetId,
+        );
+        // First round of a new set: drop the across-sets dodge so the
+        // new set's first round can pick freely.
+        newCurrent = SolvingState(
           round: round,
-          completedInSet: _completedInSet,
+          completedInSet: newCompletedInSet,
           optionCount: _optionCount,
           wrongChoiceId: saved.wrongChoiceId,
         );
       case SessionPhase.solved:
-        _completedInSet = saved.roundIndex + 1;
-        final round = _reconstructRound(saved.currentRoundOptionIds);
-        _lastTarget = round.target;
-        _lastTargetAcrossSets = round.target;
-        _usedInSet.add(round.target);
-        if (_usedInSet.length > _setSize) {
-          _usedInSet.removeAt(0);
-        }
-        current = SolvedState(
+        final round = _reconstructRound(
+          saved.currentRoundOptionIds,
+          targetId: saved.currentRoundTargetId,
+        );
+        newCurrent = SolvedState(
           round: round,
-          completedInSet: _completedInSet,
+          completedInSet: newCompletedInSet,
           optionCount: _optionCount,
         );
       case SessionPhase.setCompleted:
-        _completedInSet = _setSize;
-        if (_usedInSet.isNotEmpty) {
-          _lastTargetAcrossSets = _usedInSet.last;
-        }
-        current = SetCompletedState(
-          recentItems: List.unmodifiable(_usedInSet),
-          totalCompletedToday: _totalCompleted,
+        newCurrent = SetCompletedState(
+          recentItems: List.unmodifiable(newUsedInSet),
+          totalCompletedToday: saved.totalCompleted,
         );
       case SessionPhase.resting:
-        _completedInSet = _setSize;
-        if (_usedInSet.isNotEmpty) {
-          _lastTargetAcrossSets = _usedInSet.last;
-        }
-        current = RestingState(
-          recentItems: List.unmodifiable(_usedInSet),
-          totalCompletedToday: _totalCompleted,
+        newCurrent = RestingState(
+          recentItems: List.unmodifiable(newUsedInSet),
+          totalCompletedToday: saved.totalCompleted,
         );
     }
+    // Commit the rebuild only after every pre-condition has succeeded.
+    _totalCompleted = saved.totalCompleted;
+    _completedInSet = newCompletedInSet;
+    _usedInSet
+      ..clear()
+      ..addAll(newUsedInSet);
+    if (saved.phase == SessionPhase.solving && saved.roundIndex == 0) {
+      _lastTargetAcrossSets = null;
+    } else {
+      _lastTargetAcrossSets = newLastTargetAcrossSets;
+    }
+    if (newCurrent is SolvedState) {
+      _lastTarget = newCurrent.round.target;
+      _lastTargetAcrossSets = newCurrent.round.target;
+    } else {
+      _lastTarget = null;
+    }
+    current = newCurrent;
   }
 
   /// Public for tests: lets the caller peek at "what was the last target?"
@@ -384,10 +387,14 @@ class GameController {
     return null;
   }
 
-  /// Reconstruct a [ShadowRound] from the saved option ordering.
-  /// The first id is the target; the rest are distractors in the same
-  /// order the UI was showing when the snapshot was written.
-  ShadowRound _reconstructRound(List<String> optionIds) {
+  /// Reconstruct a [ShadowRound] from the saved option ordering. The
+  /// caller passes the optional `targetId` separately so the saved
+  /// order can stay faithful to the UI layout (target may appear
+  /// anywhere in the list).
+  ShadowRound _reconstructRound(
+    List<String> optionIds, {
+    String? targetId,
+  }) {
     if (optionIds.isEmpty) {
       throw StateError(
           'cannot reconstruct round: currentRoundOptionIds is empty');
@@ -398,13 +405,29 @@ class GameController {
       if (item == null) {
         throw StateError(
           'cannot reconstruct round: "$id" is no longer in the catalogue. '
-          'Reset the session with restartFromTotalCompleted(0) or update the '
+          'Reset the session with resumeFromTotalCompleted(0) or update the '
           'saved snapshot to match the new catalogue.',
         );
       }
       items.add(item);
     }
-    return ShadowRound(target: items.first, options: items);
+    ShadowItem? target;
+    if (targetId != null) {
+      for (final item in items) {
+        if (item.id == targetId) {
+          target = item;
+          break;
+        }
+      }
+      if (target == null) {
+        throw StateError(
+          'cannot reconstruct round: target "$targetId" missing from optionIds',
+        );
+      }
+    } else {
+      target = items.first;
+    }
+    return ShadowRound(target: target, options: items);
   }
 
   /// Last computed state. Held by the controller only between transitions;

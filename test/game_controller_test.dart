@@ -529,11 +529,7 @@ void main() {
       fresh.restoreFrom(snapshot);
       final restored = fresh.current! as SolvingState;
       expect(restored.completedInSet, snapshot.roundIndex);
-      expect(
-        _orderedIds(restored.round),
-        _orderedIds(solving.round),
-        reason: 'restored round must keep the same target-first ordering',
-      );
+      expectRoundsMatch(restored.round, solving.round);
       expect(restored.round.target.id, solving.round.target.id);
       expect(restored.wrongChoiceId, wrong.id);
     });
@@ -662,10 +658,7 @@ void main() {
       final restored = fresh.current! as SolvingState;
       // The restored round must be exactly the same as the snapshot point.
       expect(restored.round.target.id, beforeSnapshot.round.target.id);
-      expect(
-        _orderedIds(restored.round),
-        _orderedIds(beforeSnapshot.round),
-      );
+      expectRoundsMatch(restored.round, beforeSnapshot.round);
       // Finishing the restored set must still produce a SetCompleted
       // with the same 5 targets and totalCompleted=5.
       for (var i = 0; i < 3; i++) {
@@ -683,15 +676,16 @@ extension<T> on T {
   R let<R>(R Function(T) f) => f(this);
 }
 
-/// Compare two rounds by their Issue #22 snapshot form: target first,
-/// then every other option in their original order. RoundFactory reshuffles
-/// options, so the post-shuffle order may not match across factories, but
-/// the Issue #22 contract guarantees the saved order is target-first.
-List<String> _orderedIds(ShadowRound round) {
-  return <String>[
-    round.target.id,
-    ...round.options
-        .where((o) => o.id != round.target.id)
-        .map((o) => o.id),
-  ];
+/// Compare two rounds by their full Issue #22 snapshot: option order
+/// (post-shuffle, exactly as the UI rendered them) and target id.
+/// RoundFactory reshuffles options so the order may not match across
+/// factories, but the saved snapshot must include the same shuffled
+/// order on resume.
+void expectRoundsMatch(ShadowRound a, ShadowRound b) {
+  expect(b.target.id, a.target.id, reason: 'same target');
+  expect(
+    b.options.map((o) => o.id).toList(),
+    a.options.map((o) => o.id).toList(),
+    reason: 'same option ordering (target may sit anywhere in the list)',
+  );
 }

@@ -23,6 +23,7 @@ class GameProgress {
     this.phase = SessionPhase.solving,
     this.roundIndex = 0,
     this.currentRoundOptionIds = const <String>[],
+    this.currentRoundTargetId,
     this.wrongChoiceId,
   });
 
@@ -51,12 +52,18 @@ class GameProgress {
   /// 5 for SetCompleted/Resting.
   final int roundIndex;
 
-  /// Exact ordering of the option tiles (target first) of the round
-  /// identified by [roundIndex]. Empty for SetCompleted / Resting
-  /// because the review and resting screens do not show an option
-  /// layout. Persisted as a list of catalogue ids; the controller
-  /// resolves them back to [ShadowItem]s at resume time.
+  /// Exact ordering of the option tiles as they were laid out in the
+  /// UI when the snapshot was written. The list preserves the visual
+  /// order, which is *not* required to put the target first -- the
+  /// target id is stored in [currentRoundTargetId]. Empty for
+  /// SetCompleted / Resting.
   final List<String> currentRoundOptionIds;
+
+  /// Id of the target the child was looking for in the active round.
+  /// Stored separately from [currentRoundOptionIds] so the option
+  /// layout stays faithful to what the UI rendered, even if the
+  /// shuffle happened to place the target mid-list.
+  final String? currentRoundTargetId;
 
   /// Id of the wrong option the child just tapped (only relevant for
   /// [SessionPhase.solving] snapshots), so the wrong-tile highlight
@@ -78,6 +85,7 @@ class GameProgress {
         'phase': phase.name,
         'roundIndex': roundIndex,
         'currentRoundOptionIds': currentRoundOptionIds,
+        'currentRoundTargetId': currentRoundTargetId,
         'wrongChoiceId': wrongChoiceId,
       };
 
@@ -101,6 +109,7 @@ class GameProgress {
                   .map((e) => e.toString()),
             )
           : const <String>[],
+      currentRoundTargetId: json['currentRoundTargetId'] as String?,
       wrongChoiceId: json['wrongChoiceId'] as String?,
     );
   }
@@ -113,6 +122,7 @@ class GameProgress {
     SessionPhase? phase,
     int? roundIndex,
     List<String>? currentRoundOptionIds,
+    Object? currentRoundTargetId = _sentinel,
     Object? wrongChoiceId = _sentinel,
   }) {
     return GameProgress(
@@ -125,6 +135,9 @@ class GameProgress {
       roundIndex: roundIndex ?? this.roundIndex,
       currentRoundOptionIds:
           currentRoundOptionIds ?? this.currentRoundOptionIds,
+      currentRoundTargetId: identical(currentRoundTargetId, _sentinel)
+          ? this.currentRoundTargetId
+          : currentRoundTargetId as String?,
       wrongChoiceId: identical(wrongChoiceId, _sentinel)
           ? this.wrongChoiceId
           : wrongChoiceId as String?,
@@ -162,6 +175,7 @@ class SharedPreferencesGameProgressStore implements GameProgressStore {
   static const _phaseKey = 'phase';
   static const _roundIndexKey = 'roundIndex';
   static const _roundOptionsKey = 'currentRoundOptionIds';
+  static const _roundTargetKey = 'currentRoundTargetId';
   static const _wrongChoiceIdKey = 'wrongChoiceId';
 
   @override
@@ -183,6 +197,7 @@ class SharedPreferencesGameProgressStore implements GameProgressStore {
       roundIndex: prefs.getInt(_roundIndexKey) ?? 0,
       currentRoundOptionIds:
           prefs.getStringList(_roundOptionsKey) ?? const <String>[],
+      currentRoundTargetId: prefs.getString(_roundTargetKey),
       wrongChoiceId: prefs.getString(_wrongChoiceIdKey),
     );
   }
@@ -206,6 +221,11 @@ class SharedPreferencesGameProgressStore implements GameProgressStore {
       _roundOptionsKey,
       progress.currentRoundOptionIds,
     );
+    if (progress.currentRoundTargetId == null) {
+      await prefs.remove(_roundTargetKey);
+    } else {
+      await prefs.setString(_roundTargetKey, progress.currentRoundTargetId!);
+    }
     if (progress.wrongChoiceId == null) {
       await prefs.remove(_wrongChoiceIdKey);
     } else {
@@ -223,6 +243,7 @@ class SharedPreferencesGameProgressStore implements GameProgressStore {
     await prefs.remove(_phaseKey);
     await prefs.remove(_roundIndexKey);
     await prefs.remove(_roundOptionsKey);
+    await prefs.remove(_roundTargetKey);
     await prefs.remove(_wrongChoiceIdKey);
   }
 

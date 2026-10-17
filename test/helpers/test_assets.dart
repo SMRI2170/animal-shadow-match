@@ -4,14 +4,20 @@ import 'package:animal_shadow_match/domain/shadow_item.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+/// StandardMessageCodec-encoded empty map (`{}`). AssetImage resolves via
+/// `AssetManifest.loadFromAssetBundle` which expects this blob at
+/// `AssetManifest.bin`; without it the AssetImage.obtainKey path crashes
+/// before our PNG bytes are even consulted.
+final List<int> _emptyAssetManifest = const [0x0D, 0x00];
+
 /// In-memory [AssetBundle] that resolves every well-known asset key from a
 /// flat map. Lets widget tests mount widgets with `Image.asset(...)` paths
 /// without bundling the real WebP files.
 ///
 /// Widget tests that exercise an [ImageProvider] bypass this bundle
-/// entirely; tests that exercise [Image.asset] use this bundle but should
-/// declare assets on `assets/development/` so the test environment has the
-/// manifest wired up. See single_asset_effect_test.dart for details.
+/// entirely; tests that exercise [Image.asset] use this bundle. We also
+/// serve an empty `AssetManifest.bin` so [AssetImage.obtainKey] can
+/// resolve without a real Flutter build manifest.
 class InMemoryAssetBundle extends CachingAssetBundle {
   InMemoryAssetBundle(this._entries);
 
@@ -21,6 +27,11 @@ class InMemoryAssetBundle extends CachingAssetBundle {
 
   @override
   Future<ByteData> load(String key) async {
+    if (key == 'AssetManifest.bin') {
+      return ByteData.view(
+        Uint8List.fromList(_emptyAssetManifest).buffer,
+      );
+    }
     final value = _entries[key];
     if (value is List<int>) {
       return ByteData.view(Uint8List.fromList(value).buffer);

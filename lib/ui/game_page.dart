@@ -129,11 +129,17 @@ class _PlayBoardState extends State<_PlayBoard> {
       factory: widget.factory,
     );
     _state = _controller.start();
-    // Attempt to restore from persisted progress (Issue #22 / #25). The
-    // store is read once on the first frame; we clear the saved progress
-    // afterwards so the next cold start begins a fresh set unless the
-    // player explicitly returns mid-set.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeResume());
+    // Try to restore the saved snapshot first; if the snapshot is
+    // unreadable the catch path drops it and we start fresh. Only
+    // after the resume attempt does the first persist run, so a
+    // cold start on a broken snapshot can't be overwritten by the
+    // initial frame (Issue #22).
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await _maybeResume();
+      if (!mounted) return;
+      _persistProgress();
+    });
   }
 
   @override
@@ -148,14 +154,20 @@ class _PlayBoardState extends State<_PlayBoard> {
     final saved = await widget.progressStore.load();
     if (!mounted || saved == null) return;
     if (saved.totalCompleted <= 0) return;
-    setState(() {
-      // Issue #22 strict resume: round the player was on, the exact
-      // option ordering, and the in-set history are all part of the
-      // snapshot, so a cold start lands the child on the same
-      // question they had open — not just on the next set.
-      _controller.restoreFrom(saved);
-      _state = _controller.current;
-    });
+    // Issue #22 strict resume: the snapshot covers phase + round +
+    // option ordering, so a cold start lands the child on the exact
+    // question they had open. Old/broken snapshots fall through to a
+    // fresh start instead of crashing the app.
+    try {
+      setState(() {
+        _controller.restoreFrom(saved);
+        _state = _controller.current;
+      });
+    } on StateError {
+      // Snapshot is unusable (e.g. catalog changed). Drop it and start
+      // a brand-new run; the next save will overwrite the bad record.
+      await widget.progressStore.clear();
+    }
   }
 
   void _onChoice(ShadowItem item) {
@@ -173,6 +185,9 @@ class _PlayBoardState extends State<_PlayBoard> {
     } else {
       _wrongResetTimer?.cancel();
       setState(() => _wrongChoice = item.id);
+      // Persist the wrongChoiceId too, so a cold start after a wrong
+      // tap puts the highlight back on the same tile.
+      _persistProgress();
       _wrongResetTimer = Timer(const Duration(milliseconds: 500), () {
         if (mounted) setState(() => _wrongChoice = null);
       });
@@ -183,7 +198,13 @@ class _PlayBoardState extends State<_PlayBoard> {
     final current = _state;
     if (current is! SolvedState) return;
     final next = _controller.onEffectFinished();
-    setState(() => _state = next);
+    setState(() {
+      _state = next;
+      // The next round (or the review screen) is now visible; persist
+      // so a cold start here lands on that same screen rather than
+      // replaying the just-finished FX (Issue #22).
+    });
+    _persistProgress();
   }
 
   void _onContinueFromSet() {
@@ -201,12 +222,14 @@ class _PlayBoardState extends State<_PlayBoard> {
     final current = _state;
     if (current is! SetCompletedState) return;
     setState(() => _state = _controller.onRest());
+    _persistProgress();
   }
 
   void _onResumeFromRest() {
     final current = _state;
     if (current is! RestingState) return;
     setState(() => _state = _controller.onResume());
+    _persistProgress();
   }
 
   Future<void> _persistProgress() async {
